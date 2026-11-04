@@ -114,4 +114,5 @@ php -l hazard.php
 
 Then verify: batch imports and skipping files; PDF page changes; two-point scale on a known scan; irregular lot corners; house upload leaves plot dimensions unchanged; PNG upload returns an endpoint URL; image persists after reload in the same session; version restore preserves current site; ghost view in 2D/3D; empty/missing/overlapping/holed GeoJSON layers; high flood class remains high after floor raising; and changed coordinates invalidate the old result.
 #   A R C H I s p a c e _ S E  
+ #   A R C H I s p a c e _ S E  
  

@@ -1,0 +1,1 @@
+{"name":"archispace/auth","description":"ARCHIspace account and verified-email authentication","type":"project","require":{"php":"^8.2","ext-pdo":"*","ext-pdo_sqlite":"*","ext-mbstring":"*","ext-openssl":"*","phpmailer/phpmailer":"^7.0"},"scripts":{"test":"php tests/auth.php"}}

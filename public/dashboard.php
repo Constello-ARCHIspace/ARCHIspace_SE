@@ -19,6 +19,12 @@ function dashIcon(string $name): string {
     return '<svg class="dash-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'.($paths[$name]??'').'</svg>';
 }
 
+function dashStatus(string $status): string {
+    $labels=['unassigned'=>'Awaiting reviewer','awaiting_owner'=>'Feedback received','completed'=>'Review completed'];
+    $label=$labels[$status]??ucfirst(str_replace('_',' ',$status));
+    return '<span class="badge '.($status==='unassigned'?'amber':'').'">'.esc($label).'</span>';
+}
+
 // Own submissions, newest first. Studio designs live in the browser, so the server only knows submissions.
 $rows=[];$total=0;
 try{$list=$service->projects((int)$user['id'],'','',1,true);$rows=$list['rows'];$total=(int)$list['total'];}
@@ -79,7 +85,7 @@ $initials=mb_strtoupper(mb_substr((string)$user['name'],0,2));
 <?php if($latest): ?>
 <article class="dash-project"><div class="dash-project-body">
 <div class="dash-plan-wrap"><?php if($detailOk && $roomCount>0): ?><canvas class="review-plan" width="640" height="300" data-rooms="<?= esc($roomsJson) ?>" aria-label="Layout of your latest submission"></canvas><?php else: ?><div class="dash-plan-empty">Plan preview unavailable</div><?php endif; ?></div>
-<div class="dash-details"><div class="dash-tags"><span class="badge"><?= esc(mb_strtoupper((string)$latest['kind'])) ?></span><?= badge((string)$latest['status']) ?></div>
+<div class="dash-details"><div class="dash-tags"><span class="badge"><?= esc(mb_strtoupper((string)$latest['kind'])) ?></span><?= dashStatus((string)$latest['status']) ?></div>
 <h2><?= esc((string)$latest['name']) ?></h2>
 <p class="dash-meta"><?php if($detailOk): ?><?= $roomCount ?> rooms · room floor area <?= number_format($area,1) ?> m²<br><?php endif; ?>Submitted <?= dateLabel($latest['created_at']) ?><br>Reviewer: <?= esc($reviewer) ?></p>
 <p class="dash-meta">Studio designs are saved in your browser. Submit one for review to see it here.</p>

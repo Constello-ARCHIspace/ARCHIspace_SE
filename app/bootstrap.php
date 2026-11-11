@@ -66,7 +66,7 @@ function requireStaff(bool $adminOnly=false): array {
     }
     return $u;
 }
-function accountHome(array $user): string { return $user['role']==='admin'?'admin.php':($user['role']==='sub_admin'?'subadmin.php':'index.php'); }
+function accountHome(array $user): string { return $user['role']==='admin'?'admin.php':($user['role']==='sub_admin'?'subadmin.php':'dashboard.php'); }
 function sensitiveAction(array $actor,string $password): void {
     global $auth,$db;
     $auth->limit('reauth:user:'.$actor['id'],5,900);

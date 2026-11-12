@@ -16,7 +16,10 @@ final class ProjectSubmission {
             foreach(['x','z','w','d'] as $key){if(!isset($r[$key])||!is_numeric($r[$key])||!is_finite((float)$r[$key])||abs((float)$r[$key])>10000)throw new InvalidArgumentException('Invalid room dimensions.');}
             if((float)$r['w']<=0||(float)$r['d']<=0)throw new InvalidArgumentException('Room dimensions must be positive.');
             if(!is_string($r['name']??'')||mb_strlen($r['name']??'')>100)throw new InvalidArgumentException('Invalid room name.');
+            if(isset($r['level'])&&(!is_int($r['level'])||$r['level']<0||$r['level']>29))throw new InvalidArgumentException('Invalid room floor. Up to 30 floors are supported.');
         }
+        $floors=$state['floors']??[];
+        if(!is_array($floors)||!array_is_list($floors)||count($floors)>30)throw new InvalidArgumentException('Up to 30 floors are supported.');
         $bps=$state['blueprints']??[];
         if(!is_array($bps)||!array_is_list($bps)||count($bps)>20)throw new InvalidArgumentException('At most 20 saved blueprint images are supported.');
         $service=new AdminService($this->db);$user=$service->user($actor);

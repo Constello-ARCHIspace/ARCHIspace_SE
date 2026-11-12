@@ -134,6 +134,10 @@ canvas#plan2d{display:none;cursor:default}
 .gcard canvas{width:100%;height:150px;display:block;background:#0b1118}
 .ginfo{padding:12px}.ginfo h3{margin:0 0 3px;font-size:14px}.ginfo p{margin:0 0 10px;color:var(--muted);font-size:11.5px;min-height:32px}
 .tags{display:flex;gap:5px;margin-bottom:10px;flex-wrap:wrap}.tags span{font-size:10px;font-family:var(--mono);background:#243041;color:#b9cbe0;border-radius:5px;padding:2px 6px}
+/* multi-storey */
+.floor-row{display:flex;gap:6px;align-items:center;margin-bottom:8px}.floor-row select{flex:1}
+.floor-actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin:8px 0}.floor-actions button{padding:6px 4px;font-size:11.5px}
+#floorSelect{width:auto;min-width:118px;padding:5px 8px}
 /* blueprint upload styles */
 .bp-dropzone{border:2px dashed var(--line2);border-radius:14px;padding:28px 16px;text-align:center;transition:.2s;cursor:pointer;background:transparent}
 .bp-dropzone:hover,.bp-dropzone.dragover{border-color:var(--accent);background:#f2b84b0a}
@@ -209,6 +213,13 @@ canvas#plan2d{display:none;cursor:default}
   <div class="tabs"><button class="tab on" data-tab="build">Build</button><button class="tab" data-tab="site">Site</button><button class="tab" data-tab="env">Environment</button></div>
 
   <div class="pane on" data-pane="build">
+    <div class="sect"><div class="stitle">Storeys</div>
+      <div class="field"><label for="buildingKind">Building type</label><select id="buildingKind"><option>House</option><option>Commercial</option><option>Mixed use</option></select></div>
+      <div class="floor-row"><select id="floorPanelSelect" aria-label="Floor being edited"></select></div>
+      <div class="floor-actions"><button id="addFloorBtn" title="Add an empty floor on top">+ Add floor</button><button id="copyFloorBtn" title="Copy this floor's rooms and fixtures to a new top floor">⧉ Copy floor</button><button id="removeFloorBtn" class="danger" title="Remove this floor and everything on it">Remove</button></div>
+      <div class="field"><label for="floorHeight">Floor height (m) <output id="floorHeightOut"></output></label><input id="floorHeight" type="number" min="2.2" max="6" step="0.1" placeholder="Uses wall height"></div>
+      <p class="help" id="floorHelp">Each floor sits one floor height plus a slab above the floor below. Leave the height empty to use the wall height in Site. Rooms and fixtures are added to the floor shown here.</p>
+    </div>
     <div class="sect"><div class="stitle">Design versions</div><select id="versionList" aria-label="Design versions"></select><button id="restoreVersion">Restore as new version</button></div><div class="sect"><div class="stitle">Rooms</div><div class="tiles" id="roomPalette"></div></div>
     <div class="sect"><div class="stitle">Furniture &amp; fixtures</div><div id="objPalette"></div>
       <p class="help" style="margin-top:10px">Doors and windows snap to the nearest wall and cut a real opening. Moving a room carries its furniture and openings with it.</p></div>
@@ -275,6 +286,7 @@ canvas#plan2d{display:none;cursor:default}
 <main class="workspace">
   <div class="toolbar">
     <div class="seg"><button id="v3d" class="on">3D model</button><button id="v2d">2D plan</button><button id="vTop">Top</button></div>
+    <select id="floorSelect" aria-label="Floor shown in the plan"></select>
     <div class="seg"><button id="gridBtn" class="on">Grid</button><button id="snapBtn" class="on">Snap</button><button id="labelBtn" class="on">Labels</button></div>
     <button id="roofToggleBtn" aria-pressed="true" title="Show or hide the roof">Roof: Shown</button>
     <select id="compareMode" aria-label="Compare design"><option value="off">Comparison off</option><option value="ghost">Ghost suggestion</option><option value="split">Split plans</option></select><button id="fitBtn">⤢ Fit</button>
@@ -295,6 +307,7 @@ canvas#plan2d{display:none;cursor:default}
 <aside class="side right" id="right">
   <div class="card"><h3 class="properties-heading">Properties<img src="assets/figma/studio-imgSlidersHorizontal.svg" alt=""></h3><div id="inspector"></div></div>
   <div class="card"><h3>Project summary</h3>
+    <div class="stat"><span>Storeys</span><b id="sFloors">1</b></div>
     <div class="stat"><span>Rooms</span><b id="sRooms">0</b></div>
     <div class="stat"><span>Bedrooms</span><b id="sBeds">0</b></div>
     <div class="stat"><span>Floor area</span><b id="sArea">0 m²</b></div>
@@ -324,6 +337,7 @@ canvas#plan2d{display:none;cursor:default}
       <button id="bpTypeLot" class="on" data-bptype="lot" style="background:transparent;border-color:var(--line2);color:var(--text)">🗺 Lot / site plan</button>
     </div>
   </div>
+  <div class="field" id="bpFloorField"><label for="bpFloor">Floor this plan belongs to</label><select id="bpFloor"></select></div>
   <div id="bpPreviewWrap" style="text-align:center;margin-bottom:14px;background:#0b1118;border-radius:12px;padding:16px;border:1px solid var(--line)">
     <img id="bpPreviewImg" src="" alt="Blueprint preview" style="max-width:100%;max-height:300px;border-radius:8px;display:none">
     <div id="bpPreviewEmpty" class="empty">No image selected yet.</div>
@@ -408,7 +422,7 @@ const isOpening=t=>t==='Door'||t==='Window';
 const PAL={grass:[[72,116,62],[132,170,92]],sand:[[190,168,120],[226,208,156]],stone:[[100,108,118],[158,166,176]],soil:[[110,82,58],[160,126,92]],snow:[[198,208,222],[247,251,255]]};
 
 /* ---------- state ---------- */
-function blank(){return{name:'Untitled house',site:{width:26,depth:28,ground:0,hills:.8,scale:1,seed:3,material:'grass',floorRaise:0,wall:2.8,roof:'off',wallColor:'#ebe6dc',roofColor:'#41546d'},river:{pts:[],width:3,depth:.5},env:{hour:12.5,weather:'clear',flood:.6,quake:'moderate',sim:false},rooms:[],objects:[],blueprints:[],versions:[],hazard:null,location:null,nextId:1,nextBpId:1}}
+function blank(){return{name:'Untitled house',site:{width:26,depth:28,ground:0,hills:.8,scale:1,seed:3,material:'grass',floorRaise:0,wall:2.8,roof:'off',wallColor:'#ebe6dc',roofColor:'#41546d',kind:'House'},floors:[{h:null}],river:{pts:[],width:3,depth:.5},env:{hour:12.5,weather:'clear',flood:.6,quake:'moderate',sim:false},rooms:[],objects:[],blueprints:[],versions:[],hazard:null,location:null,nextId:1,nextBpId:1}}
 let S=blank();
 let sel=null,view='3d',showGrid=true,snapOn=true,showLabels=true,riverMode=false,playMode=false,drag=null,nudgeTimer=null,quakeUntil=0,flash=0,lastT=0,planCache=null;
 // Each view starts with its own default roof visibility: 3D shows it; Top hides it.
@@ -441,7 +455,24 @@ function terrainColor(x,z,h){const pal=PAL[S.site.material]||PAL.grass;let t=cla
 function roomSamples(r){const a=[];for(const sx of[-1,0,1])for(const sz of[-1,0,1])a.push(terrainH(r.x+sx*r.w/2,r.z+sz*r.d/2));return a}
 const roomPad=r=>Math.max(...roomSamples(r))+(Number(S.site.floorRaise)||0);
 function inRoom(r,x,z,m){return Math.abs(x-r.x)<=r.w/2+m&&Math.abs(z-r.z)<=r.d/2+m}
-function floorTopAt(x,z,m=.12){let best=null;for(const r of S.rooms)if(inRoom(r,x,z,m)){const v=roomPad(r)+FLOOR;if(best===null||v>best)best=v}return best===null?terrainH(x,z):best}
+/* ---------- storeys ---------- */
+// Floors are numbered from 0 in data and shown as Floor 1, 2, 3… to users.
+const MAX_FLOORS=30,MAX_ROOMS=500;
+let curFloor=0,datumCache=null;
+const lvl=it=>clamp(Math.round(Number(it&&it.level)||0),0,MAX_FLOORS-1);
+const onFloor=(it,f)=>lvl(it)===f;
+const floorName=i=>'Floor '+(i+1);
+function kindHeight(kind,i){return kind==='Commercial'?(i===0?4.5:3.5):kind==='Mixed use'?(i===0?4.5:2.8):null}
+function floorH(i){const h=Number(S.floors?.[i]?.h);return Number.isFinite(h)&&h>0?clamp(h,2.2,6):S.site.wall}
+function stackH(L){let t=0;for(let i=0;i<L;i++)t+=floorH(i)+FLOOR;return t}
+function ensureFloors(){if(!Array.isArray(S.floors)||!S.floors.length)S.floors=[{h:null}];S.floors=S.floors.slice(0,MAX_FLOORS).map(f=>({h:Number.isFinite(Number(f&&f.h))&&Number(f.h)>0?clamp(Number(f.h),2.2,6):null}));const top=Math.max(0,...S.rooms.map(lvl),...S.objects.map(lvl),...(S.blueprints||[]).map(lvl));while(S.floors.length<=top&&S.floors.length<MAX_FLOORS)S.floors.push({h:kindHeight(S.site.kind,S.floors.length)});curFloor=clamp(curFloor,0,S.floors.length-1)}
+// Upper floors share one datum: the highest finished-floor pad on Floor 1.
+function groundDatum(){if(datumCache!==null)return datumCache;const g=S.rooms.filter(r=>lvl(r)===0);datumCache=g.length?Math.max(...g.map(roomPad)):(Number(S.site.floorRaise)||0)+Math.max(S.site.ground,...S.rooms.map(r=>Math.max(...roomSamples(r))));return datumCache}
+function roomBase(r){const L=lvl(r);return L?groundDatum()+stackH(L):roomPad(r)}
+// 0 = open to the sky, 1 = partly built over, 2 = fully built over (sampled on a 5×5 grid).
+function coverAbove(r){const L=lvl(r)+1,up=S.rooms.filter(o=>lvl(o)===L&&Math.abs(o.x-r.x)<(o.w+r.w)/2-.01&&Math.abs(o.z-r.z)<(o.d+r.d)/2-.01);if(!up.length)return 0;for(let i=0;i<5;i++)for(let j=0;j<5;j++){const x=r.x+(i/4-.5)*(r.w-.1),z=r.z+(j/4-.5)*(r.d-.1);if(!up.some(o=>inRoom(o,x,z,.01)))return 1}return 2}
+function totalHeight(){return stackH(S.floors.length-1)+floorH(S.floors.length-1)+FLOOR}
+function floorTopAt(x,z,m=.12,L=0){let best=null;for(const r of S.rooms)if(lvl(r)===L&&inRoom(r,x,z,m)){const v=roomBase(r)+FLOOR;if(best===null||v>best)best=v}if(best!==null)return best;return L?groundDatum()+stackH(L)+FLOOR:terrainH(x,z)}
 
 /* ---------- three.js ---------- */
 function mat(color,o={}){const k=color+JSON.stringify(o);let m=matCache.get(k);if(!m){m=new THREE.MeshStandardMaterial({color,roughness:o.r??.75,metalness:o.m??0,transparent:o.t!==undefined,opacity:o.t??1,flatShading:!!o.flat});if(o.glass){m.emissive=new THREE.Color(0xffd48a);m.emissiveIntensity=0;glassMats.add(m)}matCache.set(k,m)}return m}
@@ -464,7 +495,7 @@ function init3D(){
 function clearWorld(){if(!world)return;world.traverse(n=>{if(n.geometry)n.geometry.dispose();if(n.isSprite){n.material.map?.dispose();n.material.dispose()}});matCache.forEach(m=>m.dispose());matCache.clear();glassMats.clear();roofMeshes.length=0;world.clear();floodMesh=null;if(selBox){scene.remove(selBox);selBox.geometry.dispose();selBox=null}}
 function makeLabel(text){const c=document.createElement('canvas');c.width=512;c.height=96;const x=c.getContext('2d');x.fillStyle='rgba(10,16,24,.82)';x.beginPath();x.roundRect?x.roundRect(6,10,500,76,38):x.rect(6,10,500,76);x.fill();x.strokeStyle='#f2b84b';x.lineWidth=3;x.stroke();x.fillStyle='#f4f7fb';x.font='600 36px Inter,system-ui,sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillText(text,256,50,470);const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;const s=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false,fog:false}));s.scale.set(3.4,.64,1);s.renderOrder=10;return s}
 function rebuild(){
- planCache=null;updateSummary();if(!scene){updateRoofVisibility();draw2D();return}
+ planCache=null;datumCache=null;ensureFloors();updateSummary();renderFloorUI();if(!scene){updateRoofVisibility();draw2D();return}
  clearWorld();buildTerrain();buildRiver();buildLotBoundary3D();S.rooms.forEach(buildRoom);S.objects.forEach(buildObject);buildFlood();buildComparison();
  updateRoofVisibility();
  const m=Math.max(S.site.width,S.site.depth)*.8;const c=sun.shadow.camera;c.left=-m;c.right=m;c.top=m;c.bottom=-m;c.near=1;c.far=160;c.updateProjectionMatrix();
@@ -489,17 +520,21 @@ function buildRiver(){
  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(v),3));g.setIndex(idx);g.computeVertexNormals();
  world.add(new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0x2f93d1,roughness:.12,metalness:.25,transparent:true,opacity:.86,side:THREE.DoubleSide})))}
 function buildFlood(){floodMesh=null;if(!S.env.sim||S.env.flood<=0)return;const m=new THREE.Mesh(new THREE.PlaneGeometry(S.site.width,S.site.depth),new THREE.MeshStandardMaterial({color:0x2f8fd0,transparent:true,opacity:.42,roughness:.1,metalness:.2,side:THREE.DoubleSide}));m.rotation.x=-Math.PI/2;m.position.y=S.site.ground+S.env.flood;world.add(m);floodMesh=m}
-function openingsOnWall(r,side){const out=[];const hz=side.horiz;for(const o of S.objects){if(!isOpening(o.type))continue;const orient=Math.round(((o.rot%180)+180)%180)===0;if(orient!==hz)continue;let u=null;if(hz){if(Math.abs(o.z-(r.z+side.off))<.35&&Math.abs(o.x-r.x)<=r.w/2)u=o.x-r.x}else{if(Math.abs(o.x-(r.x+side.off))<.35&&Math.abs(o.z-r.z)<=r.d/2)u=-(o.z-r.z)}if(u!==null)out.push({u,w:o.w,e:o.e||0,h:o.h})}return out.sort((a,b)=>a.u-b.u)}
+function openingsOnWall(r,side){const out=[];const hz=side.horiz;for(const o of S.objects){if(!isOpening(o.type)||lvl(o)!==lvl(r))continue;const orient=Math.round(((o.rot%180)+180)%180)===0;if(orient!==hz)continue;let u=null;if(hz){if(Math.abs(o.z-(r.z+side.off))<.35&&Math.abs(o.x-r.x)<=r.w/2)u=o.x-r.x}else{if(Math.abs(o.x-(r.x+side.off))<.35&&Math.abs(o.z-r.z)<=r.d/2)u=-(o.z-r.z)}if(u!==null)out.push({u,w:o.w,e:o.e||0,h:o.h})}return out.sort((a,b)=>a.u-b.u)}
 function buildRoom(r){
- const g=new THREE.Group();g.userData={kind:'room',id:r.id};const pad=roomPad(r),low=Math.min(...roomSamples(r)),wh=S.site.wall;g.position.set(r.x,pad,r.z);
- const fh=Math.max(.25,pad-low+.35),fnd=new THREE.Mesh(new THREE.BoxGeometry(r.w+.3,fh,r.d+.3),mat('#8a8f96',{r:.95}));fnd.position.y=-fh/2;fnd.castShadow=fnd.receiveShadow=true;g.add(fnd);
+ const g=new THREE.Group();g.userData={kind:'room',id:r.id};const L=lvl(r),pad=roomBase(r),wh=floorH(L);g.position.set(r.x,pad,r.z);
+ if(!L){const low=Math.min(...roomSamples(r)),fh=Math.max(.25,pad-low+.35),fnd=new THREE.Mesh(new THREE.BoxGeometry(r.w+.3,fh,r.d+.3),mat('#8a8f96',{r:.95}));fnd.position.y=-fh/2;fnd.castShadow=fnd.receiveShadow=true;g.add(fnd)}
+ const covered=coverAbove(r);
  const fl=new THREE.Mesh(new THREE.BoxGeometry(r.w,FLOOR,r.d),mat(shade(r.c,.78),{r:.55}));fl.position.y=FLOOR/2;fl.receiveShadow=true;fl.castShadow=true;g.add(fl);
  const wm=mat(S.site.wallColor,{r:.9});
  const sides=[{horiz:true,off:-r.d/2,L:r.w+T},{horiz:true,off:r.d/2,L:r.w+T},{horiz:false,off:-r.w/2,L:r.d-T},{horiz:false,off:r.w/2,L:r.d-T}];
  for(const sd of sides){const L=sd.L,sh=new THREE.Shape();sh.moveTo(-L/2,0);sh.lineTo(L/2,0);sh.lineTo(L/2,wh);sh.lineTo(-L/2,wh);sh.closePath();
   let last=-L/2+.05;for(const op of openingsOnWall(r,sd)){const u0=clamp(op.u-op.w/2,-L/2+.1,L/2-.1),u1=clamp(op.u+op.w/2,-L/2+.1,L/2-.1),y0=clamp(op.e,.02,wh-.3),y1=Math.min(wh-.05,y0+op.h);if(u1-u0<.2||y1-y0<.2||u0<last+.05)continue;last=u1;const h=new THREE.Path();h.moveTo(u0,y0);h.lineTo(u1,y0);h.lineTo(u1,y1);h.lineTo(u0,y1);h.closePath();sh.holes.push(h)}
   const geo=new THREE.ExtrudeGeometry(sh,{depth:T,bevelEnabled:false});geo.translate(0,0,-T/2);const m=new THREE.Mesh(geo,wm);m.castShadow=m.receiveShadow=true;m.position.set(sd.horiz?0:sd.off,FLOOR,sd.horiz?sd.off:0);m.rotation.y=sd.horiz?0:Math.PI/2;g.add(m)}
- if(S.site.roof==='flat'){const m=new THREE.Mesh(new THREE.BoxGeometry(r.w+.5,.2,r.d+.5),mat(S.site.roofColor,{r:.8}));m.position.y=FLOOR+wh+.1;m.castShadow=m.receiveShadow=true;m.userData.isRoof=true;roofMeshes.push(m);g.add(m)}
+ if(covered===2){}
+ // Partly built over: a flat slab (terrace) instead of a roof, flush with the floor above.
+ else if(covered===1){if(S.site.roof!=='off'){const m=new THREE.Mesh(new THREE.BoxGeometry(r.w+.15,FLOOR-.01,r.d+.15),mat(S.site.roofColor,{r:.8}));m.position.y=FLOOR+wh+(FLOOR-.01)/2;m.castShadow=m.receiveShadow=true;m.userData.isRoof=true;roofMeshes.push(m);g.add(m)}}
+ else if(S.site.roof==='flat'){const m=new THREE.Mesh(new THREE.BoxGeometry(r.w+.5,.2,r.d+.5),mat(S.site.roofColor,{r:.8}));m.position.y=FLOOR+wh+.1;m.castShadow=m.receiveShadow=true;m.userData.isRoof=true;roofMeshes.push(m);g.add(m)}
  else if(S.site.roof==='gable'){const rx=r.w>=r.d,span=(rx?r.d:r.w)+.7,len=(rx?r.w:r.d)+.7,rise=span*.26,sh=new THREE.Shape();sh.moveTo(-span/2,0);sh.lineTo(span/2,0);sh.lineTo(0,rise);sh.closePath();const geo=new THREE.ExtrudeGeometry(sh,{depth:len,bevelEnabled:false});geo.translate(0,0,-len/2);const m=new THREE.Mesh(geo,mat(S.site.roofColor,{r:.8}));m.rotation.y=rx?Math.PI/2:0;m.position.y=FLOOR+wh;m.castShadow=m.receiveShadow=true;m.userData.isRoof=true;roofMeshes.push(m);g.add(m)}
  world.add(g);
  if(showLabels){const lb=makeLabel(r.name);lb.position.set(r.x,pad+FLOOR+wh+.7,r.z);lb.userData.labelFor=r.id;world.add(lb)}}
@@ -529,9 +564,9 @@ function buildModel(o){
  }
  return g}
 function buildObject(o){
- const g=buildModel(o);g.userData={kind:'object',id:o.id};g.position.set(o.x,floorTopAt(o.x,o.z),o.z);g.rotation.y=(o.rot||0)*Math.PI/180;world.add(g)}
+ const g=buildModel(o);g.userData={kind:'object',id:o.id};g.position.set(o.x,floorTopAt(o.x,o.z,.12,lvl(o)),o.z);g.rotation.y=(o.rot||0)*Math.PI/180;world.add(g)}
 function applySelection3D(){if(selBox){scene.remove(selBox);selBox.geometry.dispose();selBox=null}if(!sel||!world)return;const g=world.children.find(c=>c.userData.kind===sel.kind&&c.userData.id===sel.id);if(g){selBox=new THREE.BoxHelper(g,0xf2b84b);scene.add(selBox)}}
-function syncLive(kind,it){const g=world.children.find(c=>c.userData.kind===kind&&c.userData.id===it.id);if(!g)return;g.position.x=it.x;g.position.z=it.z;if(kind==='object'){g.position.y=floorTopAt(it.x,it.z);g.rotation.y=it.rot*Math.PI/180}else{const pad=roomPad(it);g.position.y=pad;const lb=world.children.find(c=>c.userData.labelFor===it.id);if(lb)lb.position.set(it.x,pad+FLOOR+S.site.wall+.7,it.z)}}
+function syncLive(kind,it){const g=world.children.find(c=>c.userData.kind===kind&&c.userData.id===it.id);if(!g)return;g.position.x=it.x;g.position.z=it.z;if(kind==='object'){g.position.y=floorTopAt(it.x,it.z,.12,lvl(it));g.rotation.y=it.rot*Math.PI/180}else{const pad=roomBase(it);g.position.y=pad;const lb=world.children.find(c=>c.userData.labelFor===it.id);if(lb)lb.position.set(it.x,pad+FLOOR+floorH(lvl(it))+.7,it.z)}}
 
 /* ---------- environment ---------- */
 function applyEnv(){
@@ -550,7 +585,7 @@ function updateFlood(){if(floodMesh)floodMesh.position.y=S.site.ground+S.env.flo
 function updateSim(){
  $('simBar').style.display=S.env.sim?'block':'none';$('simBtn').textContent=S.env.sim?'■ Stop simulation':'▶ Run simulation';$('simBtn').classList.toggle('primary',!S.env.sim);
  const el=$('simReport');if(!S.env.sim){el.textContent='Simulation is off. This is a visual study only — not a safety certification.';return}
- const lvl=S.site.ground+S.env.flood,wet=S.rooms.filter(r=>roomPad(r)+FLOOR<lvl),h=S.env.hour,hh=String(Math.floor(h)).padStart(2,'0')+':'+String(Math.round((h%1)*60)).padStart(2,'0');
+ const lvl=S.site.ground+S.env.flood,wet=S.rooms.filter(r=>roomBase(r)+FLOOR<lvl),h=S.env.hour,hh=String(Math.floor(h)).padStart(2,'0')+':'+String(Math.round((h%1)*60)).padStart(2,'0');
  let t=`<b>Conditions:</b> ${hh}, ${esc(S.env.weather)}.<br><b>Flood plane:</b> +${S.env.flood.toFixed(1)} m above datum. `;
  t+=wet.length?`<span class="bad">${wet.length} room${wet.length>1?'s':''} sit below this level: ${wet.map(r=>esc(r.name)).join(', ')}.</span> Consider raising the finished floor or regrading.`:'<span class="ok">All finished floors sit above the flood plane.</span>';
  t+=`<br><b>Earthquake:</b> ${esc(S.env.quake)} shaking shown visually. <i>This is not an engineering analysis.</i>`;el.innerHTML=t}
@@ -558,7 +593,7 @@ function startQuake(){if(S.env.quake!=='none')quakeUntil=performance.now()+5000}
 
 /* ---------- camera ---------- */
 function updateCam(){if(!camera||playMode)return;camera.position.set(cam.tx+cam.dist*Math.sin(cam.phi)*Math.sin(cam.theta),cam.ty+cam.dist*Math.cos(cam.phi),cam.tz+cam.dist*Math.sin(cam.phi)*Math.cos(cam.theta));camera.lookAt(cam.tx,cam.ty,cam.tz)}
-function fitCamera(top){Object.assign(cam,{tx:0,ty:S.site.ground+1,tz:0,dist:Math.max(S.site.width,S.site.depth)*(top?1.25:1.35),theta:top?0:.75,phi:top?.0001:1.0});updateCam()}
+function fitCamera(top){const tall=S.floors&&S.floors.length>1?totalHeight():0;Object.assign(cam,{tx:0,ty:S.site.ground+1+(top?0:tall*.35),tz:0,dist:Math.max(S.site.width,S.site.depth,tall*1.1)*(top?1.25:1.35),theta:top?0:.75,phi:top?.0001:1.0});updateCam()}
 function resize(){const w=wrap.clientWidth,h=wrap.clientHeight;if(renderer&&w&&h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}fit2D();draw2D()}
 function animate(t){requestAnimationFrame(animate);if(!renderer)return;const dt=Math.min(.05,(t-lastT)/1000||0);lastT=t;if(view==='2d')return;
  if(playMode)stepPlay(dt);
@@ -570,35 +605,35 @@ function animate(t){requestAnimationFrame(animate);if(!renderer)return;const dt=
  renderer.render(scene,camera)}
 
 /* ---------- play mode ---------- */
-function enterPlay(){if(!renderer)return;if(view!=='3d')setView('3d');playMode=true;play.x=0;play.z=Math.min(S.site.depth/2-2,(S.rooms.length?Math.max(...S.rooms.map(r=>r.z+r.d/2)):0)+4);play.yaw=0;play.pitch=0;play.y=floorTopAt(play.x,play.z)+1.65;camera.rotation.order='YXZ';$('playBtn').textContent='■ Exit walk';$('viewTitle').textContent='Walk-through';$('hint').textContent='WASD / arrows move · mouse look (click scene to capture) · Shift run · Esc exit';cv3.requestPointerLock?.();toast('Walk-through started')}
+function enterPlay(){if(!renderer)return;if(view!=='3d')setView('3d');playMode=true;play.x=0;play.z=Math.min(S.site.depth/2-2,(S.rooms.length?Math.max(...S.rooms.map(r=>r.z+r.d/2)):0)+4);play.yaw=0;play.pitch=0;play.y=floorTopAt(play.x,play.z,.12,0)+1.65;camera.rotation.order='YXZ';$('playBtn').textContent='■ Exit walk';$('viewTitle').textContent='Walk-through';$('hint').textContent='WASD / arrows move · mouse look (click scene to capture) · Shift run · Esc exit';cv3.requestPointerLock?.();toast('Walk-through started')}
 function exitPlay(){playMode=false;document.exitPointerLock?.();$('playBtn').textContent='▶ Walk through';updateCam();setView(view)}
 function stepPlay(dt){const sp=(keys.shift?6:3)*dt;let f=0,s=0;if(keys.w||keys.arrowup)f++;if(keys.s||keys.arrowdown)f--;if(keys.d||keys.arrowright)s++;if(keys.a||keys.arrowleft)s--;
  const fx=-Math.sin(play.yaw),fz=-Math.cos(play.yaw),rx=Math.cos(play.yaw),rz=-Math.sin(play.yaw);play.x=clamp(play.x+(fx*f+rx*s)*sp,-S.site.width/2+.4,S.site.width/2-.4);play.z=clamp(play.z+(fz*f+rz*s)*sp,-S.site.depth/2+.4,S.site.depth/2-.4);
- play.y=lerp(play.y,floorTopAt(play.x,play.z,0)+1.65,Math.min(1,dt*10));camera.position.set(play.x,play.y,play.z);camera.rotation.set(play.pitch,play.yaw,0)}
+ play.y=lerp(play.y,floorTopAt(play.x,play.z,0,0)+1.65,Math.min(1,dt*10));camera.position.set(play.x,play.y,play.z);camera.rotation.set(play.pitch,play.yaw,0)}
 
 /* ---------- geometry helpers ---------- */
 function clampRoom(r){const sw=S.site.width,sd=S.site.depth;r.w=Math.min(r.w,sw);r.d=Math.min(r.d,sd);r.x=clamp(r.x,-sw/2+r.w/2,sw/2-r.w/2);r.z=clamp(r.z,-sd/2+r.d/2,sd/2-r.d/2)}
 function clampRooms(){S.rooms.forEach(clampRoom);S.objects.forEach(o=>{o.x=clamp(o.x,-S.site.width/2+.2,S.site.width/2-.2);o.z=clamp(o.z,-S.site.depth/2+.2,S.site.depth/2-.2)});S.river.pts.forEach(p=>{p.x=clamp(p.x,-S.site.width/2,S.site.width/2);p.z=clamp(p.z,-S.site.depth/2,S.site.depth/2)})}
-const objectsInRoom=r=>S.objects.filter(o=>inRoom(r,o.x,o.z,T));
+const objectsInRoom=r=>S.objects.filter(o=>lvl(o)===lvl(r)&&inRoom(r,o.x,o.z,T));
 function moveRoomTo(r,x,z){const sw=S.site.width,sd=S.site.depth;x=clamp(x,-sw/2+r.w/2,sw/2-r.w/2);z=clamp(z,-sd/2+r.d/2,sd/2-r.d/2);const dx=x-r.x,dz=z-r.z;if(!dx&&!dz)return[];const at=objectsInRoom(r);at.forEach(o=>{o.x+=dx;o.z+=dz});r.x=x;r.z=z;return at}
-function edgeSnap(r,x,z){const th=.35;let bx=th,bz=th,nx=x,nz=z;for(const o of S.rooms){if(o===r)continue;if(Math.abs(z-o.z)<(r.d+o.d)/2+th)for(const tx of[o.x+o.w/2+r.w/2,o.x-o.w/2-r.w/2,o.x-o.w/2+r.w/2,o.x+o.w/2-r.w/2]){const dd=Math.abs(tx-x);if(dd<bx){bx=dd;nx=tx}}if(Math.abs(x-o.x)<(r.w+o.w)/2+th)for(const tz of[o.z+o.d/2+r.d/2,o.z-o.d/2-r.d/2,o.z-o.d/2+r.d/2,o.z+o.d/2-r.d/2]){const dd=Math.abs(tz-z);if(dd<bz){bz=dd;nz=tz}}}return[nx,nz]}
-function wallSnap(o,x,z){let best=null,bd=.9;for(const r of S.rooms)for(const sd of[{h:1,off:-r.d/2,rot:0},{h:1,off:r.d/2,rot:180},{h:0,off:-r.w/2,rot:90},{h:0,off:r.w/2,rot:270}]){let d,px,pz;if(sd.h){const z0=r.z+sd.off,lo=r.x-r.w/2+o.w/2+.1,hi=r.x+r.w/2-o.w/2-.1;if(lo>hi)continue;d=Math.hypot(Math.max(0,Math.abs(x-r.x)-r.w/2),z-z0);px=clamp(Math.round(x*10)/10,lo,hi);pz=z0}else{const x0=r.x+sd.off,lo=r.z-r.d/2+o.w/2+.1,hi=r.z+r.d/2-o.w/2-.1;if(lo>hi)continue;d=Math.hypot(x-x0,Math.max(0,Math.abs(z-r.z)-r.d/2));pz=clamp(Math.round(z*10)/10,lo,hi);px=x0}if(d<bd){bd=d;const keep=Math.round(((o.rot%180)+180)%180)===(sd.h?0:90);best={x:px,z:pz,rot:keep?o.rot:sd.rot}}}return best}
+function edgeSnap(r,x,z){const th=.35;let bx=th,bz=th,nx=x,nz=z;for(const o of S.rooms){if(o===r||lvl(o)!==lvl(r))continue;if(Math.abs(z-o.z)<(r.d+o.d)/2+th)for(const tx of[o.x+o.w/2+r.w/2,o.x-o.w/2-r.w/2,o.x-o.w/2+r.w/2,o.x+o.w/2-r.w/2]){const dd=Math.abs(tx-x);if(dd<bx){bx=dd;nx=tx}}if(Math.abs(x-o.x)<(r.w+o.w)/2+th)for(const tz of[o.z+o.d/2+r.d/2,o.z-o.d/2-r.d/2,o.z-o.d/2+r.d/2,o.z+o.d/2-r.d/2]){const dd=Math.abs(tz-z);if(dd<bz){bz=dd;nz=tz}}}return[nx,nz]}
+function wallSnap(o,x,z){let best=null,bd=.9;for(const r of S.rooms.filter(q=>lvl(q)===lvl(o)))for(const sd of[{h:1,off:-r.d/2,rot:0},{h:1,off:r.d/2,rot:180},{h:0,off:-r.w/2,rot:90},{h:0,off:r.w/2,rot:270}]){let d,px,pz;if(sd.h){const z0=r.z+sd.off,lo=r.x-r.w/2+o.w/2+.1,hi=r.x+r.w/2-o.w/2-.1;if(lo>hi)continue;d=Math.hypot(Math.max(0,Math.abs(x-r.x)-r.w/2),z-z0);px=clamp(Math.round(x*10)/10,lo,hi);pz=z0}else{const x0=r.x+sd.off,lo=r.z-r.d/2+o.w/2+.1,hi=r.z+r.d/2-o.w/2-.1;if(lo>hi)continue;d=Math.hypot(x-x0,Math.max(0,Math.abs(z-r.z)-r.d/2));pz=clamp(Math.round(z*10)/10,lo,hi);px=x0}if(d<bd){bd=d;const keep=Math.round(((o.rot%180)+180)%180)===(sd.h?0:90);best={x:px,z:pz,rot:keep?o.rot:sd.rot}}}return best}
 function placeObject(o,x,z){if(isOpening(o.type)){const w=wallSnap(o,x,z);if(w){o.x=w.x;o.z=w.z;o.rot=w.rot;return}}if(snapOn){x=Math.round(x/G)*G;z=Math.round(z/G)*G}o.x=clamp(x,-S.site.width/2+.2,S.site.width/2-.2);o.z=clamp(z,-S.site.depth/2+.2,S.site.depth/2-.2)}
 function placeRoom(r,x,z){if(snapOn){x=Math.round((x-r.w/2)/G)*G+r.w/2;z=Math.round((z-r.d/2)/G)*G+r.d/2}[x,z]=edgeSnap(r,x,z);return moveRoomTo(r,x,z)}
-function freeSpot(w,d){const sw=S.site.width,sd=S.site.depth,c=[];for(let z=-sd/2+d/2;z<=sd/2-d/2+.01;z+=.5)for(let x=-sw/2+w/2;x<=sw/2-w/2+.01;x+=.5)c.push([x,z]);c.sort((a,b)=>Math.hypot(a[0],a[1])-Math.hypot(b[0],b[1]));for(const[x,z]of c)if(!S.rooms.some(o=>Math.abs(o.x-x)<(o.w+w)/2-.01&&Math.abs(o.z-z)<(o.d+d)/2-.01)&&(S.river.pts.length<2||riverDist(x,z)>S.river.width/2+Math.max(w,d)/2+1))return{x:Math.round(x*4)/4,z:Math.round(z*4)/4};return{x:0,z:0}}
+function freeSpot(w,d,L=curFloor){const sw=S.site.width,sd=S.site.depth,c=[];for(let z=-sd/2+d/2;z<=sd/2-d/2+.01;z+=.5)for(let x=-sw/2+w/2;x<=sw/2-w/2+.01;x+=.5)c.push([x,z]);c.sort((a,b)=>Math.hypot(a[0],a[1])-Math.hypot(b[0],b[1]));for(const[x,z]of c)if(!S.rooms.some(o=>lvl(o)===L&&Math.abs(o.x-x)<(o.w+w)/2-.01&&Math.abs(o.z-z)<(o.d+d)/2-.01)&&(S.river.pts.length<2||riverDist(x,z)>S.river.width/2+Math.max(w,d)/2+1))return{x:Math.round(x*4)/4,z:Math.round(z*4)/4};return{x:0,z:0}}
 
 /* ---------- add / remove ---------- */
-function addRoom(type){const p=ROOMS[type]||ROOMS.Custom,pos=freeSpot(p.w,p.d),r={id:S.nextId++,name:type==='Custom'?'Room':type,w:p.w,d:p.d,c:p.c,x:pos.x,z:pos.z};S.rooms.push(r);select({kind:'room',id:r.id});rebuild();commit();renderPanels();toast(r.name+' added — drag to position, edit size in the inspector')}
-function addObject(type){const c=CAT[type],o={id:S.nextId++,type,x:0,z:0,rot:0,w:c.w,d:c.d,h:c.h,e:c.e};
- const selRoom=sel&&sel.kind==='room'?getItem(sel):(sel&&getItem(sel)?S.rooms.find(r=>inRoom(r,getItem(sel).x,getItem(sel).z,0)):null),room=selRoom||S.rooms[S.rooms.length-1];
- if(isOpening(type)&&room){const side=type==='Door'?{n:'s',z:room.z+room.d/2,rot:180}:{n:'n',z:room.z-room.d/2,rot:0},L=room.w;let px=room.x;for(const off of[0,-1.4,1.4,-2.8,2.8,-4.2,4.2]){const x=room.x+off;if(Math.abs(off)+o.w/2+.2>L/2)continue;if(!S.objects.some(q=>isOpening(q.type)&&Math.abs(q.z-side.z)<.3&&Math.abs(q.x-x)<(q.w+o.w)/2+.1)){px=x;break}}o.x=px;o.z=side.z;o.rot=side.rot}
+function addRoom(type){if(S.rooms.length>=MAX_ROOMS)return toast('A project can have up to '+MAX_ROOMS+' rooms');const p=ROOMS[type]||ROOMS.Custom,pos=freeSpot(p.w,p.d),r={id:S.nextId++,name:type==='Custom'?'Room':type,w:p.w,d:p.d,c:p.c,x:pos.x,z:pos.z,level:curFloor};S.rooms.push(r);select({kind:'room',id:r.id});rebuild();commit();renderPanels();toast(r.name+' added to '+floorName(curFloor)+' — drag to position, edit size in the inspector')}
+function addObject(type){const c=CAT[type],o={id:S.nextId++,type,x:0,z:0,rot:0,w:c.w,d:c.d,h:c.h,e:c.e,level:c.out?0:curFloor};
+ const fr=S.rooms.filter(r=>lvl(r)===o.level),selRoom=sel&&sel.kind==='room'&&lvl(getItem(sel))===o.level?getItem(sel):(sel&&getItem(sel)&&lvl(getItem(sel))===o.level?fr.find(r=>inRoom(r,getItem(sel).x,getItem(sel).z,0)):null),room=selRoom||fr[fr.length-1];
+ if(isOpening(type)&&room){const side=type==='Door'?{n:'s',z:room.z+room.d/2,rot:180}:{n:'n',z:room.z-room.d/2,rot:0},L=room.w;let px=room.x;for(const off of[0,-1.4,1.4,-2.8,2.8,-4.2,4.2]){const x=room.x+off;if(Math.abs(off)+o.w/2+.2>L/2)continue;if(!S.objects.some(q=>isOpening(q.type)&&lvl(q)===o.level&&Math.abs(q.z-side.z)<.3&&Math.abs(q.x-x)<(q.w+o.w)/2+.1)){px=x;break}}o.x=px;o.z=side.z;o.rot=side.rot}
  else if(c.out||!room){const rw=S.river.width/2;let ok=false;for(let i=0;i<80&&!ok;i++){const x=(Math.random()-.5)*(S.site.width-3),z=(Math.random()-.5)*(S.site.depth-3);if(S.rooms.some(r=>inRoom(r,x,z,1.2)))continue;if(S.river.pts.length>1&&riverDist(x,z)<rw+1.2)continue;o.x=Math.round(x*2)/2;o.z=Math.round(z*2)/2;ok=true}}
- else{let done=false;const rad=Math.max(c.w,c.d)/2;for(let r=0;r<=2&&!done;r+=.5)for(let a=0;a<12&&!done;a++){const x=room.x+Math.cos(a)*r,z=room.z+Math.sin(a)*r;if(Math.abs(x-room.x)>room.w/2-rad-.1||Math.abs(z-room.z)>room.d/2-rad-.1)continue;if(S.objects.some(q=>!isOpening(q.type)&&q.type!=='Rug'&&Math.hypot(q.x-x,q.z-z)<rad+Math.max(q.w,q.d)/2-.1))continue;o.x=Math.round(x*4)/4;o.z=Math.round(z*4)/4;done=true}if(!done){o.x=room.x;o.z=room.z}}
- S.objects.push(o);select({kind:'object',id:o.id});rebuild();commit();renderPanels();toast(type+' added')}
+ else{let done=false;const rad=Math.max(c.w,c.d)/2;for(let r=0;r<=2&&!done;r+=.5)for(let a=0;a<12&&!done;a++){const x=room.x+Math.cos(a)*r,z=room.z+Math.sin(a)*r;if(Math.abs(x-room.x)>room.w/2-rad-.1||Math.abs(z-room.z)>room.d/2-rad-.1)continue;if(S.objects.some(q=>lvl(q)===o.level&&!isOpening(q.type)&&q.type!=='Rug'&&Math.hypot(q.x-x,q.z-z)<rad+Math.max(q.w,q.d)/2-.1))continue;o.x=Math.round(x*4)/4;o.z=Math.round(z*4)/4;done=true}if(!done){o.x=room.x;o.z=room.z}}
+ S.objects.push(o);select({kind:'object',id:o.id});rebuild();commit();renderPanels();toast(type+' added'+(c.out&&curFloor?' at ground level':''))}
 function removeSel(){if(!sel)return;if(sel.kind==='room')S.rooms=S.rooms.filter(r=>r.id!==sel.id);else S.objects=S.objects.filter(o=>o.id!==sel.id);sel=null;rebuild();commit();renderPanels()}
-function dupSel(){const it=getItem(sel);if(!it)return;const n=JSON.parse(JSON.stringify(it));n.id=S.nextId++;n.x+=.75;n.z+=.75;if(sel.kind==='room'){clampRoom(n);S.rooms.push(n)}else S.objects.push(n);select({kind:sel.kind,id:n.id});rebuild();commit();renderPanels()}
+function dupSel(){const it=getItem(sel);if(!it)return;if(sel.kind==='room'&&S.rooms.length>=MAX_ROOMS)return toast('A project can have up to '+MAX_ROOMS+' rooms');const n=JSON.parse(JSON.stringify(it));n.id=S.nextId++;n.x+=.75;n.z+=.75;if(sel.kind==='room'){clampRoom(n);S.rooms.push(n)}else S.objects.push(n);select({kind:sel.kind,id:n.id});rebuild();commit();renderPanels()}
 function rotSel(){const it=getItem(sel);if(!it||sel.kind==='room'){if(it){[it.w,it.d]=[it.d,it.w];clampRoom(it);rebuild();commit();renderPanels()}return}it.rot=(it.rot+90)%360;rebuild();commit();renderPanels()}
-function select(s){sel=s;applySelection3D();renderInspector();renderOutliner();draw2D()}
+function select(s){sel=s;const it=getItem(s);if(it&&lvl(it)!==curFloor){curFloor=lvl(it);renderFloorUI()}applySelection3D();renderInspector();renderOutliner();draw2D()}
 
 /* ---------- 2D plan ---------- */
 const pv={s:10,ox:0,oy:0};
@@ -642,12 +677,13 @@ function draw2D(){
  if(showGrid){for(let gx=Math.ceil(-sw/2);gx<=Math.floor(sw/2);gx++){const maj=gx%5===0;if(!maj&&s<7)continue;ctx.strokeStyle=maj?'rgba(255,255,255,.2)':'rgba(255,255,255,.07)';ctx.lineWidth=1;const px=pv.ox+gx*s;ctx.beginPath();ctx.moveTo(px,y0);ctx.lineTo(px,y0+sd*s);ctx.stroke()}for(let gz=Math.ceil(-sd/2);gz<=Math.floor(sd/2);gz++){const maj=gz%5===0;if(!maj&&s<7)continue;ctx.strokeStyle=maj?'rgba(255,255,255,.2)':'rgba(255,255,255,.07)';const py=pv.oy+gz*s;ctx.beginPath();ctx.moveTo(x0,py);ctx.lineTo(x0+sw*s,py);ctx.stroke()}}
  ctx.setLineDash([8,5]);ctx.strokeStyle='#3d6652';ctx.lineWidth=1.6;ctx.strokeRect(x0,y0,sw*s,sd*s);ctx.setLineDash([]);
  ctx.fillStyle='#3d6652';ctx.font='500 11px "JetBrains Mono",monospace';ctx.textAlign='center';ctx.fillText(sw.toFixed(1)+' m',pv.ox,y0-10);ctx.save();ctx.translate(x0-12,pv.oy);ctx.rotate(-Math.PI/2);ctx.fillText(sd.toFixed(1)+' m',0,0);ctx.restore();
- const bgGap='#0e151e';
- S.rooms.forEach(r=>{const x=pv.ox+(r.x-r.w/2)*s,y=pv.oy+(r.z-r.d/2)*s;ctx.fillStyle=r.c;ctx.fillRect(x,y,r.w*s,r.d*s);ctx.strokeStyle='#f3f6fa';ctx.lineWidth=Math.max(T*s,2.5);ctx.lineJoin='miter';ctx.strokeRect(x,y,r.w*s,r.d*s)});
- S.rooms.forEach(r=>{const cx=pv.ox+r.x*s,cy=pv.oy+r.z*s;ctx.fillStyle='#0b1118';ctx.textAlign='center';ctx.font='700 '+clamp(s*.42,10,15)+'px Inter,system-ui,sans-serif';ctx.fillText(r.name,cx,cy-(s>9?-0:0)-Math.min(10,s*.3),Math.max(30,r.w*s-8));ctx.font='500 '+clamp(s*.32,9,12)+'px "JetBrains Mono",monospace';ctx.globalAlpha=.75;ctx.fillText((r.w*r.d).toFixed(1)+' m²',cx,cy+Math.min(10,s*.38)+2,Math.max(30,r.w*s-8));ctx.globalAlpha=1});
+ const bgGap='#0e151e',fRooms=S.rooms.filter(r=>lvl(r)===curFloor),fObjs=S.objects.filter(o=>lvl(o)===curFloor);
+ if(curFloor>0){ctx.save();ctx.setLineDash([5,4]);ctx.strokeStyle='rgba(36,55,47,.75)';ctx.lineWidth=1.5;ctx.fillStyle='rgba(36,55,47,.08)';S.rooms.filter(r=>lvl(r)===curFloor-1).forEach(r=>{const x=pv.ox+(r.x-r.w/2)*s,y=pv.oy+(r.z-r.d/2)*s;ctx.fillRect(x,y,r.w*s,r.d*s);ctx.strokeRect(x,y,r.w*s,r.d*s)});ctx.restore()}
+ fRooms.forEach(r=>{const x=pv.ox+(r.x-r.w/2)*s,y=pv.oy+(r.z-r.d/2)*s;ctx.fillStyle=r.c;ctx.fillRect(x,y,r.w*s,r.d*s);ctx.strokeStyle='#f3f6fa';ctx.lineWidth=Math.max(T*s,2.5);ctx.lineJoin='miter';ctx.strokeRect(x,y,r.w*s,r.d*s)});
+ fRooms.forEach(r=>{const cx=pv.ox+r.x*s,cy=pv.oy+r.z*s;ctx.fillStyle='#0b1118';ctx.textAlign='center';ctx.font='700 '+clamp(s*.42,10,15)+'px Inter,system-ui,sans-serif';ctx.fillText(r.name,cx,cy-(s>9?-0:0)-Math.min(10,s*.3),Math.max(30,r.w*s-8));ctx.font='500 '+clamp(s*.32,9,12)+'px "JetBrains Mono",monospace';ctx.globalAlpha=.75;ctx.fillText((r.w*r.d).toFixed(1)+' m²',cx,cy+Math.min(10,s*.38)+2,Math.max(30,r.w*s-8));ctx.globalAlpha=1});
  const drawObj=o=>{ctx.save();ctx.translate(pv.ox+o.x*s,pv.oy+o.z*s);ctx.rotate(-(o.rot||0)*Math.PI/180);const w=o.w*s,d=Math.max(o.d*s,2);
   if(isOpening(o.type)){ctx.fillStyle=o.type==='Window'?'#1c2a3a':bgGap;ctx.fillRect(-w/2,-(T*s/2+1),w,T*s+2);sym(ctx,o.type,w,d,o.type==='Door'?'#c08850':'#7ed7ef',Math.max(1,s*.07))}else sym(ctx,o.type,w,d,o.color||CAT[o.type].c,Math.max(1,Math.min(1.8,s*.1)));ctx.restore()};
- S.objects.filter(o=>o.type==='Rug').forEach(drawObj);S.objects.filter(o=>o.type!=='Rug'&&!isOpening(o.type)).forEach(drawObj);S.objects.filter(o=>isOpening(o.type)).forEach(drawObj);
+ fObjs.filter(o=>o.type==='Rug').forEach(drawObj);fObjs.filter(o=>o.type!=='Rug'&&!isOpening(o.type)).forEach(drawObj);fObjs.filter(o=>isOpening(o.type)).forEach(drawObj);
  const it=getItem(sel);
  if(it){ctx.strokeStyle='#3d6652';ctx.lineWidth=2;ctx.setLineDash([6,4]);if(sel.kind==='room'){const x=pv.ox+(it.x-it.w/2)*s,y=pv.oy+(it.z-it.d/2)*s;ctx.strokeRect(x-3,y-3,it.w*s+6,it.d*s+6);ctx.setLineDash([]);ctx.fillStyle='#3d6652';ctx.beginPath();ctx.arc(x+it.w*s,y+it.d*s,7,0,7);ctx.fill();ctx.strokeStyle='#17120a';ctx.lineWidth=1.5;ctx.stroke();
    ctx.strokeStyle='#3d6652';ctx.fillStyle='#3d6652';ctx.lineWidth=1;ctx.font='500 11px "JetBrains Mono",monospace';const dy=y-14;ctx.beginPath();ctx.moveTo(x,dy);ctx.lineTo(x+it.w*s,dy);ctx.moveTo(x,dy-4);ctx.lineTo(x,dy+4);ctx.moveTo(x+it.w*s,dy-4);ctx.lineTo(x+it.w*s,dy+4);ctx.stroke();ctx.textAlign='center';ctx.fillText(it.w.toFixed(2)+' m',x+it.w*s/2,dy-6);const dx=x+it.w*s+16;ctx.beginPath();ctx.moveTo(dx,y);ctx.lineTo(dx,y+it.d*s);ctx.moveTo(dx-4,y);ctx.lineTo(dx+4,y);ctx.moveTo(dx-4,y+it.d*s);ctx.lineTo(dx+4,y+it.d*s);ctx.stroke();ctx.save();ctx.translate(dx+14,y+it.d*s/2);ctx.rotate(Math.PI/2);ctx.fillText(it.d.toFixed(2)+' m',0,0);ctx.restore()}
@@ -658,7 +694,7 @@ function draw2D(){
  // scale bar
  let L=1;for(const v of[1,2,5,10,20])if((L=v)*s>=80)break;const bx=W-30-L*s,by=H-26;ctx.fillStyle='#24372f';ctx.fillRect(bx,by,L*s,3);ctx.fillRect(bx,by-4,1.5,11);ctx.fillRect(bx+L*s-1.5,by-4,1.5,11);ctx.font='500 11px "JetBrains Mono",monospace';ctx.textAlign='center';ctx.fillText(L+' m',bx+L*s/2,by-8);
  plan.style.cursor=riverMode?'crosshair':'default'}
-function hitPlan(e){const p=toW(e);const pad=8/pv.s;for(let i=S.objects.length-1;i>=0;i--){const o=S.objects[i],a=(o.rot||0)*Math.PI/180,dx=p.x-o.x,dz=p.z-o.z,lx=dx*Math.cos(a)-dz*Math.sin(a),lz=dx*Math.sin(a)+dz*Math.cos(a),op=isOpening(o.type);if(Math.abs(lx)<=o.w/2+pad*.4&&Math.abs(lz)<=Math.max(o.d/2,op?.3:0)+pad*.4)return{kind:'object',id:o.id}}for(let i=S.rooms.length-1;i>=0;i--){const r=S.rooms[i];if(Math.abs(p.x-r.x)<=r.w/2&&Math.abs(p.z-r.z)<=r.d/2)return{kind:'room',id:r.id}}return null}
+function hitPlan(e){const p=toW(e);const pad=8/pv.s;for(let i=S.objects.length-1;i>=0;i--){if(lvl(S.objects[i])!==curFloor)continue;const o=S.objects[i],a=(o.rot||0)*Math.PI/180,dx=p.x-o.x,dz=p.z-o.z,lx=dx*Math.cos(a)-dz*Math.sin(a),lz=dx*Math.sin(a)+dz*Math.cos(a),op=isOpening(o.type);if(Math.abs(lx)<=o.w/2+pad*.4&&Math.abs(lz)<=Math.max(o.d/2,op?.3:0)+pad*.4)return{kind:'object',id:o.id}}for(let i=S.rooms.length-1;i>=0;i--){const r=S.rooms[i];if(lvl(r)!==curFloor)continue;if(Math.abs(p.x-r.x)<=r.w/2&&Math.abs(p.z-r.z)<=r.d/2)return{kind:'room',id:r.id}}return null}
 function onHandle(e){const r=sel&&sel.kind==='room'&&getItem(sel);if(!r)return false;const rect=plan.getBoundingClientRect(),hx=pv.ox+(r.x+r.w/2)*pv.s+rect.left,hy=pv.oy+(r.z+r.d/2)*pv.s+rect.top;return Math.hypot(e.clientX-hx,e.clientY-hy)<14}
 
 /* ---------- plan pointer ---------- */
@@ -689,19 +725,19 @@ function groundPt(e,y){raycaster.setFromCamera(ndc(e),camera);const ry=raycaster
 cv3.addEventListener('pointerdown',e=>{cv3.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});if(ptrs.size===2){const[a,b]=[...ptrs.values()];pinch=Math.hypot(a.x-b.x,a.y-b.y);drag={mode:'pinch'};return}
  if(playMode){if(document.pointerLockElement!==cv3)cv3.requestPointerLock?.();drag={mode:'look'};return}
  const hit=e.button===0?pick3D(e):null;
- if(hit){select(hit);const it=getItem(hit),y=hit.kind==='room'?roomPad(it)+FLOOR:floorTopAt(it.x,it.z),p=groundPt(e,y);drag={mode:'move',kind:hit.kind,id:hit.id,y,ox:p?p.x-it.x:0,oz:p?p.z-it.z:0,moved:false};toast('Selected '+(hit.kind==='room'?it.name:it.type)+' — drag to move')}
+ if(hit){select(hit);const it=getItem(hit),y=hit.kind==='room'?roomBase(it)+FLOOR:floorTopAt(it.x,it.z,.12,lvl(it)),p=groundPt(e,y);drag={mode:'move',kind:hit.kind,id:hit.id,y,ox:p?p.x-it.x:0,oz:p?p.z-it.z:0,moved:false};toast('Selected '+(hit.kind==='room'?it.name:it.type)+' — drag to move')}
  else{if(e.button===0&&!e.shiftKey)select(null);drag={mode:(e.shiftKey||e.button===2||e.button===1)?'pan':'orbit',px:e.clientX,py:e.clientY}}});
 cv3.addEventListener('pointermove',e=>{if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
  if(playMode){if(document.pointerLockElement===cv3||(drag&&drag.mode==='look')){play.yaw-=(e.movementX||0)*.0025;play.pitch=clamp(play.pitch-(e.movementY||0)*.0025,-1.3,1.3)}return}
  if(!drag)return;
- if(drag.mode==='pinch'&&ptrs.size===2){const[a,b]=[...ptrs.values()],d=Math.hypot(a.x-b.x,a.y-b.y);cam.dist=clamp(cam.dist*pinch/(d||1),6,140);pinch=d;updateCam();return}
+ if(drag.mode==='pinch'&&ptrs.size===2){const[a,b]=[...ptrs.values()],d=Math.hypot(a.x-b.x,a.y-b.y);cam.dist=clamp(cam.dist*pinch/(d||1),6,400);pinch=d;updateCam();return}
  if(drag.mode==='move'){const it=getItem({kind:drag.kind,id:drag.id}),p=groundPt(e,drag.y);if(!it||!p)return;drag.moved=true;let carried=[];if(drag.kind==='room')carried=placeRoom(it,p.x-drag.ox,p.z-drag.oz);else placeObject(it,p.x-drag.ox,p.z-drag.oz);syncLive(drag.kind,it);carried.forEach(o=>syncLive('object',o));return}
  const dx=e.clientX-drag.px,dy=e.clientY-drag.py;drag.px=e.clientX;drag.py=e.clientY;
  if(drag.mode==='orbit'){cam.theta-=dx*.007;cam.phi=clamp(cam.phi-dy*.006,.0001,1.5);updateCam()}
  else if(drag.mode==='pan'){const k=cam.dist*.0017;cam.tx-=Math.cos(cam.theta)*dx*k;cam.tz+=Math.sin(cam.theta)*dx*k;cam.tx+=-Math.sin(cam.theta)*dy*k*-1*-1;cam.tz+=-Math.cos(cam.theta)*dy*k*-1*-1;updateCam()}});
 function end3D(e){ptrs.delete(e.pointerId);if(ptrs.size<2&&drag&&drag.mode==='pinch')drag=null;if(drag&&drag.mode==='move'&&drag.moved){rebuild();commit();renderPanels()}if(ptrs.size===0)drag=null}
 cv3.addEventListener('pointerup',end3D);cv3.addEventListener('pointercancel',end3D);cv3.addEventListener('contextmenu',e=>e.preventDefault());
-cv3.addEventListener('wheel',e=>{e.preventDefault();if(playMode)return;cam.dist=clamp(cam.dist*(e.deltaY>0?1.08:.92),6,140);updateCam()},{passive:false});
+cv3.addEventListener('wheel',e=>{e.preventDefault();if(playMode)return;cam.dist=clamp(cam.dist*(e.deltaY>0?1.08:.92),6,400);updateCam()},{passive:false});
 document.addEventListener('pointerlockchange',()=>{if(playMode&&document.pointerLockElement!==cv3&&!drag)exitPlay()});
 
 /* ---------- roof visibility ---------- */
@@ -723,7 +759,7 @@ function updateRoofVisibility(){
 /* ---------- views ---------- */
 function setView(v){if(playMode&&v!==view)exitPlay();if(v!==view)roofOverride=null;view=v;const is2=v==='2d';cv3.style.display=is2?'none':'block';plan.style.display=is2?'block':'none';$('coords').style.display='none';
  ['3d','2d','Top'].forEach(k=>$('v'+k).classList.toggle('on',(k==='3d'&&v==='3d')||(k==='2d'&&v==='2d')||(k==='Top'&&v==='top')));
- $('viewTitle').textContent=v==='3d'?'3D model':v==='2d'?'Floor plan':'Top view';
+ $('viewTitle').textContent=v==='3d'?'3D model':v==='2d'?'Floor plan · '+floorName(curFloor):'Top view';
  $('hint').textContent=is2?'Drag to move · corner handle resizes a room · drag empty space or right-drag to pan · scroll to zoom':'Drag items to move · drag empty space to orbit · Shift/right-drag to pan · scroll to zoom';
  if(v==='top')fitCamera(true);else if(v==='3d'&&!playMode)fitCamera();if(is2){fit2D();draw2D()}updateRoofVisibility()}
 
@@ -764,6 +800,22 @@ window.addEventListener('keydown',e=>{const tg=(e.target.tagName||'');if(['INPUT
 window.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;keys.shift=e.shiftKey});window.addEventListener('blur',()=>{for(const k in keys)keys[k]=false});
 window.addEventListener('resize',resize);if(window.ResizeObserver)new ResizeObserver(resize).observe(wrap);
 
+/* storeys UI */
+function renderFloorUI(){
+ if(!S.floors)return;const opts=S.floors.map((_,i)=>{const n=S.rooms.filter(r=>lvl(r)===i).length;return[i,floorName(i)+' · '+n+' room'+(n===1?'':'s')]});
+ for(const id of['floorSelect','floorPanelSelect']){const e=$(id);e.replaceChildren(...opts.map(([i,t])=>new Option(t,i)));e.value=String(curFloor)}
+ const h=S.floors[curFloor]?.h;$('floorHeight').value=h??'';$('floorHeightOut').textContent=floorH(curFloor).toFixed(1)+' m';$('buildingKind').value=S.site.kind||'House';
+ $('removeFloorBtn').disabled=S.floors.length<2;$('addFloorBtn').disabled=$('copyFloorBtn').disabled=S.floors.length>=MAX_FLOORS;
+ if(view==='2d')$('viewTitle').textContent='Floor plan · '+floorName(curFloor)}
+function setFloor(i){curFloor=clamp(Number(i)||0,0,S.floors.length-1);const it=getItem(sel);if(it&&lvl(it)!==curFloor)select(null);renderFloorUI();draw2D()}
+$('floorSelect').onchange=e=>setFloor(e.target.value);$('floorPanelSelect').onchange=e=>setFloor(e.target.value);
+$('addFloorBtn').onclick=()=>{if(S.floors.length>=MAX_FLOORS)return toast('Up to '+MAX_FLOORS+' floors are supported');S.floors.push({h:kindHeight(S.site.kind,S.floors.length)});curFloor=S.floors.length-1;sel=null;rebuild();commit();renderPanels();toast(floorName(curFloor)+' added — add rooms or upload its blueprint')};
+$('copyFloorBtn').onclick=()=>{if(S.floors.length>=MAX_FLOORS)return toast('Up to '+MAX_FLOORS+' floors are supported');const src=curFloor,rooms=S.rooms.filter(r=>lvl(r)===src),objs=S.objects.filter(o=>lvl(o)===src&&!CAT[o.type]?.out);if(!rooms.length)return toast(floorName(src)+' has no rooms to copy');if(S.rooms.length+rooms.length>MAX_ROOMS)return toast('Copying would pass the '+MAX_ROOMS+'-room limit');const L=S.floors.length;S.floors.push({h:S.floors[src].h});rooms.forEach(r=>S.rooms.push({...structuredClone(r),id:S.nextId++,level:L}));objs.forEach(o=>S.objects.push({...structuredClone(o),id:S.nextId++,level:L}));curFloor=L;sel=null;rebuild();commit();renderPanels();toast(floorName(src)+' copied to '+floorName(L))};
+$('removeFloorBtn').onclick=()=>{if(S.floors.length<2)return;const L=curFloor,n=S.rooms.filter(r=>lvl(r)===L).length,b=S.blueprints.filter(bp=>bp.type==='house'&&lvl(bp)===L).length;if(!confirm('Remove '+floorName(L)+' with its '+n+' rooms, fixtures and '+b+' blueprint(s)? Floors above move down one level.'))return;
+ S.rooms=S.rooms.filter(r=>lvl(r)!==L);S.objects=S.objects.filter(o=>lvl(o)!==L);S.blueprints=S.blueprints.filter(bp=>bp.type!=='house'||lvl(bp)!==L);for(const it of[...S.rooms,...S.objects,...S.blueprints])if(lvl(it)>L)it.level=lvl(it)-1;S.floors.splice(L,1);curFloor=Math.max(0,L-1);sel=null;bpImages.clear();rebuild();commit();renderPanels();toast('Floor removed')};
+$('floorHeight').onchange=e=>{const v=e.target.value.trim()===''?null:Number(e.target.value);S.floors[curFloor].h=v===null||!Number.isFinite(v)?null:clamp(v,2.2,6);rebuild();commit()};
+$('buildingKind').onchange=e=>{S.site.kind=e.target.value;S.floors.forEach((f,i)=>f.h=kindHeight(S.site.kind,i));rebuild();commit();toast(S.site.kind==='House'?'Floor heights follow the wall height in Site':'Floor heights set to rough '+S.site.kind+' concept defaults; edit any floor')};
+
 /* palettes */
 function buildPalettes(){
  const rp=$('roomPalette');Object.keys(ROOMS).forEach(n=>{const b=document.createElement('button');b.className='tile';b.title='Add '+n;const c=document.createElement('canvas');drawIcon(c,'room',n);const l=document.createElement('span');l.textContent=n==='Custom'?'Custom':n;const sm=document.createElement('small');sm.textContent=ROOMS[n].w+'×'+ROOMS[n].d;b.append(c,l,sm);b.onclick=()=>addRoom(n);rp.append(b)});
@@ -776,6 +828,7 @@ function renderInspector(){
  const room=sel.kind==='room',F=(l,k,v,st,mn,mx,full)=>`<label class="if${full?' full':''}"><span>${l}</span><input type="number" data-k="${k}" value="${r1(v)}" step="${st}" min="${mn}" max="${mx}"></label>`;
  let h=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="chip">${room?'Room':esc(it.type)}</span><span class="help">#${it.id}</span></div><div class="insp-grid">`;
  if(room)h+=`<label class="if full"><span>Name</span><input type="text" data-k="name" value="${esc(it.name)}" maxlength="40"></label>`;
+ if(room||!CAT[it.type]?.out)h+=`<label class="if full"><span>Floor${room?' (moves its fixtures too)':''}</span><select data-k="level">${S.floors.map((_,i)=>`<option value="${i}"${i===lvl(it)?' selected':''}>${floorName(i)}</option>`).join('')}</select></label>`;
  h+=F('Width (m)','w',it.w,.1,room?1:.05,40)+F('Depth (m)','d',it.d,.1,room?1:.05,40);
  if(!room)h+=F('Height (m)','h',it.h,.1,.01,10);if(!room&&isOpening(it.type))h+=F('Sill height (m)','e',it.e||0,.05,0,6);
  h+=F('Position X (m)','x',it.x,.25,-100,100)+F('Position Z (m)','z',it.z,.25,-100,100);
@@ -784,15 +837,17 @@ function renderInspector(){
  h+='</div>';if(room)h+=`<div class="help" style="margin-bottom:6px">Area ${(it.w*it.d).toFixed(1)} m² · perimeter ${(2*(it.w+it.d)).toFixed(1)} m</div>`;
  h+=`<div class="btnrow"><button data-act="rot">⟳ ${room?'Swap W/D':'Rotate 90°'}</button><button data-act="dup">⧉ Duplicate</button><button data-act="del" class="danger">🗑 Delete</button></div>`;el.innerHTML=h}
 $('inspector').addEventListener('change',e=>{const k=e.target.dataset.k;if(!k)return;const it=getItem(sel);if(!it)return;const room=sel.kind==='room';let v=e.target.value;
- if(k==='name')it.name=String(v).slice(0,40)||'Room';else if(k==='c'||k==='color')it[k]=v;else{v=Number(v);if(!Number.isFinite(v))return;
+ if(k==='level'){const L=clamp(Math.round(Number(v))||0,0,S.floors.length-1);if(room)objectsInRoom(it).forEach(o=>o.level=L);it.level=L;curFloor=L;toast((room?it.name:it.type)+' moved to '+floorName(L))}
+ else if(k==='name')it.name=String(v).slice(0,40)||'Room';else if(k==='c'||k==='color')it[k]=v;else{v=Number(v);if(!Number.isFinite(v))return;
   if(k==='x'||k==='z'){if(room)moveRoomTo(it,k==='x'?v:it.x,k==='z'?v:it.z);else it[k]=v}else if(k==='rot')it.rot=((v%360)+360)%360;else if(k==='w'||k==='d'){it[k]=clamp(v,room?1:.05,40);if(room)clampRoom(it)}else if(k==='h')it.h=clamp(v,.01,10);else if(k==='e')it.e=clamp(v,0,6)}
  rebuild();commit();renderPanels()});
 $('inspector').addEventListener('click',e=>{const a=e.target.closest('[data-act]')?.dataset.act;if(a==='rot')rotSel();else if(a==='dup')dupSel();else if(a==='del')removeSel()});
 function renderOutliner(){const el=$('outliner');el.innerHTML='';if(!S.rooms.length&&!S.objects.length){el.innerHTML='<div class="empty">Add a room to begin.</div>';return}
  const row=(kind,it,color,title,sub)=>{const d=document.createElement('div');d.className='li'+(sel&&sel.kind===kind&&sel.id===it.id?' sel':'');d.innerHTML=`<i style="background:${color}"></i><div>${esc(title)}<small>${esc(sub)}</small></div>`;const b=document.createElement('button');b.className='ghost';b.textContent='✕';b.title='Delete';b.onclick=ev=>{ev.stopPropagation();sel={kind,id:it.id};removeSel()};d.onclick=()=>select({kind,id:it.id});d.append(b);el.append(d)};
- S.rooms.forEach(r=>row('room',r,r.c,r.name,`${r.w.toFixed(1)} × ${r.d.toFixed(1)} m · ${(r.w*r.d).toFixed(1)} m²`));S.objects.forEach(o=>row('object',o,o.color||CAT[o.type].c,o.type,`${o.w.toFixed(2)} × ${o.d.toFixed(2)} m`))}
-function updateSummary(){const area=S.rooms.reduce((s,r)=>s+r.w*r.d,0),doors=S.objects.filter(o=>o.type==='Door').length,wins=S.objects.filter(o=>o.type==='Window').length;
- $('sRooms').textContent=S.rooms.length;$('sBeds').textContent=S.rooms.filter(r=>/bed/i.test(r.name)).length;$('sArea').textContent=area.toFixed(1)+' m²';$('sCov').textContent=(area/(S.site.width*S.site.depth)*100).toFixed(1)+'%';$('sOpen').textContent=doors+' / '+wins;$('sObjs').textContent=S.objects.length-doors-wins;
+ const fl=it=>S.floors.length>1?'F'+(lvl(it)+1)+' · ':'';
+ S.rooms.forEach(r=>row('room',r,r.c,r.name,`${fl(r)}${r.w.toFixed(1)} × ${r.d.toFixed(1)} m · ${(r.w*r.d).toFixed(1)} m²`));S.objects.forEach(o=>row('object',o,o.color||CAT[o.type].c,o.type,`${fl(o)}${o.w.toFixed(2)} × ${o.d.toFixed(2)} m`))}
+function updateSummary(){const area=S.rooms.reduce((s,r)=>s+r.w*r.d,0),foot=S.rooms.filter(r=>lvl(r)===0).reduce((s,r)=>s+r.w*r.d,0),doors=S.objects.filter(o=>o.type==='Door').length,wins=S.objects.filter(o=>o.type==='Window').length;
+ $('sRooms').textContent=S.rooms.length;$('sBeds').textContent=S.rooms.filter(r=>/bed/i.test(r.name)).length;$('sArea').textContent=area.toFixed(1)+' m²';$('sCov').textContent=(foot/(S.site.width*S.site.depth)*100).toFixed(1)+'%';$('sFloors').textContent=(S.floors||[1]).length;$('sOpen').textContent=doors+' / '+wins;$('sObjs').textContent=S.objects.length-doors-wins;
  $('pSite').textContent='SITE '+S.site.width+' × '+S.site.depth+' m';$('pRooms').textContent=S.rooms.length+' ROOM'+(S.rooms.length===1?'':'S');$('pObjs').textContent=S.objects.length+' OBJECT'+(S.objects.length===1?'':'S')}
 function renderPanels(){renderInspector();renderOutliner();updateSummary();renderBpList();renderVersions();renderReadiness()}
 
@@ -802,15 +857,16 @@ function normalize(d){
  if(d.rooms&&d.site&&d.site.width!==undefined&&d.name!==undefined&&d.river){Object.assign(s.site,d.site);Object.assign(s.river,d.river);Object.assign(s.env,d.env||{});s.name=d.name}
  else if(d.site){const o=d.site;const m={width:'width',depth:'depth',ground:'groundElevation',hills:'hills',wall:'wallHeight'};for(const k in m)if(o[m[k]]!==undefined)s.site[k]=o[m[k]];if(o.terrainMaterial&&PAL[o.terrainMaterial])s.site.material=o.terrainMaterial;if(o.roof)s.site.roof=o.roof==='on'?'flat':o.roof==='off'?'off':o.roof;if(o.weather)s.env.weather=o.weather;if(o.floodLevel!==undefined)s.env.flood=o.floodLevel;if(o.quakeLevel)s.env.quake=o.quakeLevel;if(o.riverWidth)s.river.width=o.riverWidth;if(o.timeOfDay)s.env.hour={day:12.5,sunset:17.75,night:22}[o.timeOfDay]||12.5;s.river.pts=(d.riverPoints||[]).map(p=>({x:+p.x,z:+p.z}))}
  if(!Array.isArray(d.rooms))throw Error('Invalid project file');
- let id=1;const nid=()=>id++;s.rooms=d.rooms.map(r=>{const c=typeof r.c==='number'?numHex(r.c):(typeof r.c==='string'&&/^#[0-9a-f]{6}$/i.test(r.c)?r.c:'#8fb0c9');return{id:nid(),name:String(r.name||'Room'),w:clamp(+(r.w??r.width)||3,1,40),d:clamp(+(r.d??r.depth)||3,1,40),c,x:+r.x||0,z:+r.z||0}});
- s.objects=(d.objects||[]).filter(o=>CAT[o.type]).map(o=>{const c=CAT[o.type],q={id:nid(),type:o.type,x:+o.x||0,z:+o.z||0,rot:+(o.rot??o.rotation)||0,w:+o.w||c.w,d:+(o.d??o.depth)||c.d,h:+o.h||c.h,e:+(o.e??o.elevation)||c.e};if(isOpening(o.type))q.d=c.d;if(o.color)q.color=o.color;return q});
+ let id=1;const nid=()=>id++;s.rooms=d.rooms.map(r=>{const c=typeof r.c==='number'?numHex(r.c):(typeof r.c==='string'&&/^#[0-9a-f]{6}$/i.test(r.c)?r.c:'#8fb0c9');return{id:nid(),name:String(r.name||'Room'),w:clamp(+(r.w??r.width)||3,1,40),d:clamp(+(r.d??r.depth)||3,1,40),c,x:+r.x||0,z:+r.z||0,level:lvl(r)}});
+ s.objects=(d.objects||[]).filter(o=>CAT[o.type]).map(o=>{const c=CAT[o.type],q={id:nid(),type:o.type,level:c.out?0:lvl(o),x:+o.x||0,z:+o.z||0,rot:+(o.rot??o.rotation)||0,w:+o.w||c.w,d:+(o.d??o.depth)||c.d,h:+o.h||c.h,e:+(o.e??o.elevation)||c.e};if(isOpening(o.type))q.d=c.d;if(o.color)q.color=o.color;return q});
+ s.floors=Array.isArray(d.floors)&&d.floors.length?d.floors.slice(0,MAX_FLOORS).map(f=>({h:Number.isFinite(Number(f&&f.h))&&Number(f.h)>0?clamp(Number(f.h),2.2,6):null})):[{h:null}];if(!['House','Commercial','Mixed use'].includes(s.site.kind))s.site.kind='House';
  s.nextId=id;s.versions=Array.isArray(d.versions)?d.versions:[];s.hazard=d.hazard||null;s.location=d.location||null;
  // restore blueprints
- s.blueprints=(d.blueprints||[]).map(bp=>({...bp,id:bp.id||s.nextBpId++,name:bp.name||'Blueprint',type:bp.type==='lot'?'lot':'house',data:typeof bp.data==='string'&&(/^(data:image\/|blueprint\.php\?id=[a-f0-9]{48}$)/.test(bp.data))?bp.data:'',opacity:bp.opacity??50,scale:bp.scale??1,offsetX:bp.offsetX??0,offsetZ:bp.offsetZ??0,rotation:bp.rotation??0,visible:bp.visible!==false,w:bp.w||0,h:bp.h||0}));
+ s.blueprints=(d.blueprints||[]).map(bp=>({...bp,id:bp.id||s.nextBpId++,name:bp.name||'Blueprint',type:bp.type==='lot'?'lot':'house',data:typeof bp.data==='string'&&(/^(data:image\/|blueprint\.php\?id=[a-f0-9]{48}$)/.test(bp.data))?bp.data:'',opacity:bp.opacity??50,scale:bp.scale??1,offsetX:bp.offsetX??0,offsetZ:bp.offsetZ??0,rotation:bp.rotation??0,visible:bp.visible!==false,w:bp.w||0,h:bp.h||0,level:bp.type==='lot'?0:lvl(bp)}));
  s.nextBpId=Math.max(s.nextBpId||1,...s.blueprints.map(b=>b.id+1));
  return s}
 function loadState(d){try{S=normalize(d);bpImages.clear();comparisonSuggestion=null;comparisonBlueprint=null;$('compareMode').value='off';sel=null;clampRooms();syncUI();rebuild();fitCamera(view==='top');fit2D();renderPanels();commit();return true}catch(e){toast('Could not load project: '+e.message);return false}}
-$('submitReviewBtn').onclick=()=>{$('reviewMenu').open=false;$('reviewName').value=S.name||'Untitled project';$('reviewSubmissionStatus').textContent='';$('reviewSubmissionDialog').showModal()};
+$('submitReviewBtn').onclick=()=>{$('reviewMenu').open=false;$('reviewSubmissionForm').elements.kind.value=S.site.kind||'House';$('reviewName').value=S.name||'Untitled project';$('reviewSubmissionStatus').textContent='';$('reviewSubmissionDialog').showModal()};
 $('closeReviewSubmission').onclick=()=>$('reviewSubmissionDialog').close();
 $('reviewSubmissionForm').onsubmit=async e=>{
  e.preventDefault();const button=$('confirmReviewSubmission');button.disabled=true;$('reviewSubmissionStatus').textContent='Saving blueprint images and preparing your snapshot…';
@@ -878,6 +934,8 @@ $('galleryBtn').onclick=openGallery;$('closeGallery').onclick=()=>$('galleryModa
 
 /* ---------- blueprint upload system ---------- */
 let pendingBpData=null,pendingBpType='house';
+function fillBpFloor(selected){const e=$('bpFloor');e.replaceChildren(...S.floors.map((_,i)=>new Option(floorName(i),i)));if(S.floors.length<MAX_FLOORS)e.add(new Option('New floor ('+floorName(S.floors.length)+')','new'));e.value=String(selected);if(!e.value)e.value='0'}
+function chosenBpLevel(){if(pendingBpType==='lot')return 0;const v=$('bpFloor').value;if(v==='new'){if(S.floors.length<MAX_FLOORS)S.floors.push({h:kindHeight(S.site.kind,S.floors.length)});return S.floors.length-1}return clamp(Number(v)||0,0,S.floors.length-1)}
 function initBpUI(){
   const dropzone=$('bpDropzone'),fileInput=$('bpFileInput');
   dropzone.onclick=()=>fileInput.click();
@@ -889,8 +947,8 @@ function initBpUI(){
   // modal controls
   $('closeBpModal').onclick=cancelBlueprint;
   $('bpModal').onclick=e=>{if(e.target===$('bpModal'))cancelBlueprint()};
-  $('bpTypeHouse').onclick=()=>{pendingBpType='house';$('bpTypeHouse').classList.add('on');$('bpTypeHouse').style.cssText='';$('bpTypeLot').classList.remove('on');$('bpTypeLot').style.cssText='background:transparent;border-color:var(--line2);color:var(--text)'};
-  $('bpTypeLot').onclick=()=>{pendingBpType='lot';$('bpTypeLot').classList.add('on');$('bpTypeLot').style.cssText='';$('bpTypeHouse').classList.remove('on');$('bpTypeHouse').style.cssText='background:transparent;border-color:var(--line2);color:var(--text)'};
+  $('bpTypeHouse').onclick=()=>{pendingBpType='house';$('bpFloorField').hidden=false;$('bpTypeHouse').classList.add('on');$('bpTypeHouse').style.cssText='';$('bpTypeLot').classList.remove('on');$('bpTypeLot').style.cssText='background:transparent;border-color:var(--line2);color:var(--text)'};
+  $('bpTypeLot').onclick=()=>{pendingBpType='lot';$('bpFloorField').hidden=true;$('bpTypeLot').classList.add('on');$('bpTypeLot').style.cssText='';$('bpTypeHouse').classList.remove('on');$('bpTypeHouse').style.cssText='background:transparent;border-color:var(--line2);color:var(--text)'};
   $('bpOpacity').oninput=()=>$('bpOpOut').textContent=$('bpOpacity').value+'%';
   $('bpScale').oninput=()=>$('bpScOut').textContent=Number($('bpScale').value).toFixed(1)+'×';
   $('bpOffsetX').oninput=()=>$('bpOxOut').textContent=$('bpOffsetX').value+' m';
@@ -956,6 +1014,8 @@ async function nextBlueprint(){
     $('bpOffsetZ').value=0;$('bpOzOut').textContent='0 m';
     $('bpRotation').value=0;$('bpRotOut').textContent='0°';
     pendingBpType='house';
+    // Default floor: the one being edited if it has no plan yet, else the lowest floor without one, else a new floor.
+    {const has=i=>S.blueprints.some(b=>b.type==='house'&&lvl(b)===i),free=S.floors.findIndex((_,i)=>!has(i));fillBpFloor(!has(curFloor)?curFloor:free>=0?free:S.floors.length<MAX_FLOORS?'new':curFloor)}$('bpFloorField').hidden=false;
     $('bpTypeHouse').classList.add('on');$('bpTypeHouse').style.cssText='';
     $('bpTypeLot').classList.remove('on');$('bpTypeLot').style.cssText='background:transparent;border-color:var(--line2);color:var(--text)';
     $('bpModal').classList.add('open');
@@ -963,6 +1023,7 @@ async function nextBlueprint(){
 }
 async function confirmBpUpload(){
   if(!pendingBpData)return;
+  if(S.blueprints.length>=20){toast('A project can hold up to 20 blueprint images. Use Copy floor for repeated typical floors.');return}
   if(!validateBlueprint())return;
   $('bpConfirmBtn').disabled=true;
   try{pendingBpData=await storeBlueprint(pendingBpData)}catch(e){$('bpConfirmBtn').disabled=false;toast(e.message);return}
@@ -979,18 +1040,21 @@ async function confirmBpUpload(){
       offsetZ:Number($('bpOffsetZ').value),
       rotation:Number($('bpRotation').value),
       metersPerPixel:calibration,boundary:boundaryPoints.slice(),
+      level:chosenBpLevel(),
       visible:true,
       w:img.naturalWidth,
       h:img.naturalHeight
     };
-    S.blueprints.push(bp);
+    S.blueprints.push(bp);if(bp.type==='house')curFloor=bp.level;
     bpImages.set(bp.id,img);
     pendingBpData=null;
     applyLotBlueprint(bp);$('bpModal').classList.remove('open');
     rebuild();renderBpList();
     draw2D();
     commit();
-    if(bp.type==='house'){comparisonSuggestion=makeBlueprintSuggestion(bp,img);comparisonBlueprint=bp}if(bpQueue.length)nextBlueprint();else{bpBusy=false;if(bp.type==='house')showDesignSuggestion(bp,img)}
+    // Every house plan gets a suggestion for its own floor; other floors are never changed.
+    const suggest=bp.type==='house';
+    if(suggest){comparisonSuggestion=makeBlueprintSuggestion(bp,img);comparisonBlueprint=bp}if(bpQueue.length)nextBlueprint();else{bpBusy=false;if(suggest)showDesignSuggestion(bp,img)}
   };
   img.onerror=()=>{$('bpConfirmBtn').disabled=false;toast('Image could not be retrieved; retry or reload')};
   img.src=pendingBpData;
@@ -1007,7 +1071,7 @@ function ensureBpImage(bp){
 function drawBlueprintOverlays(ctx,s){
   if(!S.blueprints||!S.blueprints.length)return;
   for(const bp of S.blueprints){
-    if(!bp.visible)continue;
+    if(!bp.visible||(bp.type==='house'&&lvl(bp)!==curFloor))continue;
     const img=ensureBpImage(bp);
     if(!img||!img.complete||!img.naturalWidth)continue;
     ctx.save();
@@ -1040,7 +1104,7 @@ function renderBpList(){
       <div class="bp-info">
         <div class="bp-badge ${bp.type}">${bp.type==='house'?'🏠 House':'🗺 Lot'}</div>
         <div class="bp-name">${esc(bp.name)}</div>
-        <div class="bp-meta">${bp.opacity}% opacity · ${bp.scale.toFixed(1)}× scale</div>
+        <div class="bp-meta">${bp.type==='house'?floorName(lvl(bp))+' · ':''}${bp.opacity}% opacity · ${bp.scale.toFixed(1)}× scale</div>
       </div>
       <button class="bp-suggest" data-bpid="${bp.id}" title="Suggest a design from this blueprint" aria-label="Suggest a design">✦</button>
       <button class="bp-toggle ${bp.visible?'on':''}" data-bpid="${bp.id}" title="Toggle visibility">${bp.visible?'👁':'🚫'}</button>
@@ -1077,7 +1141,7 @@ function openBpEdit(id){
   $('bpOffsetX').value=bp.offsetX;$('bpOxOut').textContent=bp.offsetX+' m';
   $('bpOffsetZ').value=bp.offsetZ;$('bpOzOut').textContent=bp.offsetZ+' m';
   $('bpRotation').value=bp.rotation;$('bpRotOut').textContent=bp.rotation+'°';
-  pendingBpType=bp.type;
+  pendingBpType=bp.type;fillBpFloor(lvl(bp));$('bpFloorField').hidden=bp.type==='lot';
   if(bp.type==='house'){$('bpTypeHouse').classList.add('on');$('bpTypeHouse').style.cssText='';$('bpTypeLot').classList.remove('on');$('bpTypeLot').style.cssText='background:transparent;border-color:var(--line2);color:var(--text)'}
   else{$('bpTypeLot').classList.add('on');$('bpTypeLot').style.cssText='';$('bpTypeHouse').classList.remove('on');$('bpTypeHouse').style.cssText='background:transparent;border-color:var(--line2);color:var(--text)'}
   // change confirm button to "Update"
@@ -1087,7 +1151,7 @@ function openBpEdit(id){
     if(!validateBlueprint())return;
     bp.metersPerPixel=calibration;bp.boundary=boundaryPoints.slice();
     bp.name=$('bpNameInput').value.trim()||'Blueprint';
-    bp.type=pendingBpType;
+    bp.type=pendingBpType;bp.level=chosenBpLevel();if(bp.type==='house')curFloor=bp.level;
     bp.opacity=Number($('bpOpacity').value);
     bp.scale=Number($('bpScale').value);
     bp.offsetX=Number($('bpOffsetX').value);
@@ -1140,19 +1204,24 @@ function makeBlueprintSuggestion(bp,img){
   if(bp.type==='lot'||plotArea<440||S.site.width<19||S.site.depth<16||info.aspect<.82)templateIndex=1; // compact home
   else if(info.aspect>1.32||info.detail>.36)templateIndex=2; // wider family arrangement
   else templateIndex=0; // medium layout
+  // Upper floors: no garage template, and the layout is fitted to the outline of the floor below.
+  const L=bp.type==='house'?lvl(bp):0,below=L?S.rooms.filter(r=>lvl(r)===L-1):[];
+  if(L&&templateIndex===2)templateIndex=0;
   const source=TEMPLATES[templateIndex],starter=makeTemplate(source.def),b=roomLayoutBounds(starter.rooms);
   const width=b.x1-b.x0,depth=b.z1-b.z0;
   const targetW=Math.min(S.site.width-2.5,S.site.width*(bp.type==='lot'?.46:.58)*clamp(bp.scale,.75,1.2));
   const targetD=Math.min(S.site.depth-2.5,targetW/Math.max(.55,info.aspect));
-  const sx=clamp(targetW/width,.90,Math.min(1.45,(S.site.width-1.5)/width));
-  const sz=clamp(targetD/depth,.90,Math.min(1.45,(S.site.depth-1.5)/depth));
+  let sx=clamp(targetW/width,.90,Math.min(1.45,(S.site.width-1.5)/width));
+  let sz=clamp(targetD/depth,.90,Math.min(1.45,(S.site.depth-1.5)/depth));
   const midx=(b.x0+b.x1)/2,midz=(b.z0+b.z1)/2;
-  const moveX=clamp(bp.offsetX,-S.site.width/2+width*sx/2+.5,S.site.width/2-width*sx/2-.5);
-  const moveZ=clamp(bp.offsetZ,-S.site.depth/2+depth*sz/2+.5,S.site.depth/2-depth*sz/2-.5);
+  let moveX=clamp(bp.offsetX,-S.site.width/2+width*sx/2+.5,S.site.width/2-width*sx/2-.5);
+  let moveZ=clamp(bp.offsetZ,-S.site.depth/2+depth*sz/2+.5,S.site.depth/2-depth*sz/2-.5);
+  if(below.length){const fb=roomLayoutBounds(below);sx=clamp((fb.x1-fb.x0)/width,.5,1.6);sz=clamp((fb.z1-fb.z0)/depth,.5,1.6);moveX=(fb.x0+fb.x1)/2;moveZ=(fb.z0+fb.z1)/2}
   for(const r of starter.rooms){r.x=(r.x-midx)*sx+moveX;r.z=(r.z-midz)*sz+moveZ;r.w=r.w*sx;r.d=r.d*sz}
   // Keep fixture dimensions realistic. Their positions follow the scaled rooms.
   starter.objects=starter.objects.filter(o=>!CAT[o.type]?.out);
-  for(const o of starter.objects){o.x=(o.x-midx)*sx+moveX;o.z=(o.z-midz)*sz+moveZ}
+  for(const o of starter.objects){o.x=(o.x-midx)*sx+moveX;o.z=(o.z-midz)*sz+moveZ;o.level=L}
+  for(const r of starter.rooms)r.level=L;
   const nBeds=starter.rooms.filter(r=>/bed/i.test(r.name)).length;
   const reason=bp.type==='lot'
     ?'A compact, site-conscious home concept is proposed for the uploaded lot plan.'
@@ -1160,7 +1229,8 @@ function makeBlueprintSuggestion(bp,img){
     :info.aspect<.82?'A compact layout is proposed for this portrait-oriented blueprint.'
     :info.detail>.36?'A larger room arrangement is proposed for a line-dense blueprint.'
     :'A balanced home concept is proposed for the uploaded blueprint.';
-  return {name:source.name,rooms:starter.rooms,objects:starter.objects,roof:source.def.site.roof,reason,nBeds};
+  const where=L?`For ${floorName(L)}: ${below.length?'the layout is fitted to the outline of '+floorName(L-1)+'. ':''}`:'';
+  return {name:source.name,rooms:starter.rooms,objects:starter.objects,roof:source.def.site.roof,reason:where+reason,nBeds,level:L};
 }
 function paintConceptPreview(canvas,rooms,objects,bp){
   const ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height,sc=Math.min((w-35)/S.site.width,(h-35)/S.site.depth);
@@ -1199,12 +1269,14 @@ function keepCurrentDesign(){
 }
 function applySuggestedDesign(){
   const suggestion=pendingDesignSuggestion;if(!suggestion)return;
-  saveVersion('Before suggestion');
   // Preserve site, environment, river, uploaded blueprints and outdoor objects.
-  const outdoors=S.objects.filter(o=>CAT[o.type]?.out);
-  S.rooms=suggestion.rooms.map(r=>({...r,id:S.nextId++}));
-  S.objects=outdoors.concat(suggestion.objects.map(o=>({...o,id:S.nextId++})));
-  S.site.roof=suggestion.roof;sel=null;saveVersion('Suggested design');comparisonSuggestion=suggestion;
+  // Only the suggestion's own floor is replaced; every other floor and outdoor item is kept.
+  const L=suggestion.level||0,keep=S.objects.filter(o=>CAT[o.type]?.out||lvl(o)!==L);
+  if(S.rooms.length-S.rooms.filter(r=>lvl(r)===L).length+suggestion.rooms.length>MAX_ROOMS){toast('Applying would pass the '+MAX_ROOMS+'-room limit');return}
+  saveVersion('Before suggestion');
+  S.rooms=S.rooms.filter(r=>lvl(r)!==L).concat(suggestion.rooms.map(r=>({...r,level:L,id:S.nextId++})));
+  S.objects=keep.concat(suggestion.objects.map(o=>({...o,level:L,id:S.nextId++})));curFloor=L;
+  if(!L)S.site.roof=suggestion.roof;sel=null;saveVersion('Suggested design');comparisonSuggestion=suggestion;
   closeDesignSuggestion();syncUI();rebuild();renderPanels();commit();setView('2d');
   toast('Suggested design applied — edit it on the floor plan or 3D view');
 }
@@ -1214,10 +1286,14 @@ function showDesignSuggestion(bp,img){
   $('suggestBlueprintName').textContent='Uploaded blueprint: '+bp.name;
   $('suggestReason').textContent=suggested.reason+' Compare both layouts before making a choice.';
   $('suggestDesignName').textContent=suggested.name+' concept';
-  $('currentDesignMeta').textContent=`${S.rooms.length} rooms · ${area(S.rooms).toFixed(1)} m² · ${S.objects.length} objects. Your design will remain unchanged if you keep it.`;
+  const L=suggested.level||0,curRooms=S.rooms.filter(r=>lvl(r)===L),curObjs=S.objects.filter(o=>lvl(o)===L&&!CAT[o.type]?.out);
+  $('suggestTitle').textContent='Suggested design for '+floorName(L);
+  $('currentDesignMeta').textContent=`${floorName(L)}: ${curRooms.length} rooms · ${area(curRooms).toFixed(1)} m² · ${curObjs.length} objects. Your design will remain unchanged if you keep it. Other floors are never changed.`;
   $('suggestDesignMeta').textContent=`${suggested.rooms.length} rooms (${suggested.nBeds} bedrooms) · ${area(suggested.rooms).toFixed(1)} m² · ${suggested.objects.length} fixtures/openings. Saved as a new design version if applied.`;
-  $('currentDesignMeta').textContent+=' · Readiness '+assessReadiness(S.rooms,S.objects,S.site.roof).score+'/100';$('suggestDesignMeta').textContent+=' · Readiness '+assessReadiness(suggested.rooms,suggested.objects,suggested.roof).score+'/100';
-  paintConceptPreview($('currentDesignPreview'),S.rooms,S.objects,bp);
+  // Readiness compares the whole building with and without the suggested floor.
+  const withRooms=S.rooms.filter(r=>lvl(r)!==L).concat(suggested.rooms),withObjs=S.objects.filter(o=>CAT[o.type]?.out||lvl(o)!==L).concat(suggested.objects);
+  $('currentDesignMeta').textContent+=' · Readiness '+assessReadiness(S.rooms,S.objects,S.site.roof).score+'/100';$('suggestDesignMeta').textContent+=' · Readiness '+assessReadiness(withRooms,withObjs,L?S.site.roof:suggested.roof).score+'/100';
+  paintConceptPreview($('currentDesignPreview'),curRooms,curObjs,bp);
   paintConceptPreview($('suggestedDesignPreview'),suggested.rooms,suggested.objects,bp);
   $('designSuggestModal').classList.add('open');
 }
@@ -1272,34 +1348,37 @@ function applyLotBlueprint(bp){
 function lineMaterial(color,opacity=1){const key='line-'+color+opacity;if(!matCache.has(key))matCache.set(key,new THREE.LineBasicMaterial({color,transparent:opacity<1,opacity}));return matCache.get(key)}
 function buildLotBoundary3D(){if(!S.site.boundary?.length)return;const pts=S.site.boundary.concat(S.site.boundary[0]).map(p=>new THREE.Vector3(p.x,terrainH(p.x,p.z)+.15,p.z));const g=new THREE.BufferGeometry().setFromPoints(pts);world.add(new THREE.Line(g,lineMaterial('#ffdf78')))}
 function drawLotBoundary(ctx,s){if(!S.site.boundary?.length)return;ctx.save();ctx.strokeStyle='#ffdf78';ctx.lineWidth=3;ctx.beginPath();S.site.boundary.forEach((p,i)=>ctx[i?'lineTo':'moveTo'](pv.ox+p.x*s,pv.oy+p.z*s));ctx.closePath();ctx.stroke();ctx.restore()}
-function saveVersion(name){S.versions??=[];S.versions.push({name:name+' · '+new Date().toLocaleString(),rooms:structuredClone(S.rooms),objects:structuredClone(S.objects),roof:S.site.roof});}
+function saveVersion(name){S.versions??=[];S.versions.push({name:name+' · '+new Date().toLocaleString(),rooms:structuredClone(S.rooms),objects:structuredClone(S.objects),roof:S.site.roof,floors:structuredClone(S.floors)});}
 function renderVersions(){const e=$('versionList');e.replaceChildren();(S.versions||[]).forEach((v,i)=>e.add(new Option(v.name,i)));$('restoreVersion').disabled=!e.options.length;}
-$('restoreVersion').onclick=()=>{const v=S.versions?.[Number($('versionList').value)];if(!v)return;saveVersion('Before restore');S.rooms=structuredClone(v.rooms);S.objects=structuredClone(v.objects);S.site.roof=v.roof;S.nextId=Math.max(1,...S.rooms.concat(S.objects).map(o=>o.id+1));saveVersion('Restored '+v.name);sel=null;syncUI();rebuild();renderPanels();commit()};
-function drawGhostPlan(ctx,s){if($('compareMode').value!=='ghost'||!comparisonSuggestion)return;ctx.save();ctx.globalAlpha=.5;ctx.strokeStyle='#60ffd2';ctx.lineWidth=3;for(const r of comparisonSuggestion.rooms)ctx.strokeRect(pv.ox+(r.x-r.w/2)*s,pv.oy+(r.z-r.d/2)*s,r.w*s,r.d*s);ctx.restore()}
+$('restoreVersion').onclick=()=>{const v=S.versions?.[Number($('versionList').value)];if(!v)return;saveVersion('Before restore');S.rooms=structuredClone(v.rooms);S.objects=structuredClone(v.objects);S.site.roof=v.roof;if(v.floors)S.floors=structuredClone(v.floors);S.nextId=Math.max(1,...S.rooms.concat(S.objects).map(o=>o.id+1));saveVersion('Restored '+v.name);sel=null;syncUI();rebuild();renderPanels();commit()};
+function drawGhostPlan(ctx,s){if($('compareMode').value!=='ghost'||!comparisonSuggestion||(comparisonSuggestion.level||0)!==curFloor)return;ctx.save();ctx.globalAlpha=.5;ctx.strokeStyle='#60ffd2';ctx.lineWidth=3;for(const r of comparisonSuggestion.rooms)ctx.strokeRect(pv.ox+(r.x-r.w/2)*s,pv.oy+(r.z-r.d/2)*s,r.w*s,r.d*s);ctx.restore()}
 function buildComparison(){
  const mode=$('compareMode').value;$('comparePanel').style.display=mode==='split'&&comparisonSuggestion?'block':'none';
  if(mode==='split'&&comparisonSuggestion&&comparisonBlueprint)paintConceptPreview($('workspaceCompare'),comparisonSuggestion.rooms,comparisonSuggestion.objects,comparisonBlueprint);
  if(!world||mode!=='ghost'||!comparisonSuggestion)return;
- const g=new THREE.Group();g.userData.comparison=true;for(const r of comparisonSuggestion.rooms){const geo=new THREE.BoxGeometry(r.w,S.site.wall,r.d),edge=new THREE.EdgesGeometry(geo);geo.dispose();const mesh=new THREE.LineSegments(edge,lineMaterial('#60ffd2',.6));mesh.position.set(r.x,roomPad(r)+FLOOR+S.site.wall/2,r.z);g.add(mesh)}world.add(g);
+ const g=new THREE.Group();g.userData.comparison=true;for(const r of comparisonSuggestion.rooms){const wh=floorH(lvl(r)),geo=new THREE.BoxGeometry(r.w,wh,r.d),edge=new THREE.EdgesGeometry(geo);geo.dispose();const mesh=new THREE.LineSegments(edge,lineMaterial('#60ffd2',.6));mesh.position.set(r.x,roomBase(r)+FLOOR+wh/2,r.z);g.add(mesh)}world.add(g);
 }
 $('compareMode').onchange=()=>{if(!comparisonSuggestion){$('compareMode').value='off';return toast('Generate a suggestion with the ✦ button beside a blueprint first')}rebuild()};
 function assessReadiness(rooms=S.rooms,objects=S.objects,roof=S.site.roof){
  const water=S.site.ground+S.env.flood,points=rooms.flatMap(r=>[-1,0,1].flatMap(a=>[-1,0,1].map(b=>({x:r.x+a*r.w/2,z:r.z+b*r.d/2}))));
  let slope=0;for(const p of points){const gx=terrainH(p.x+.25,p.z)-terrainH(p.x-.25,p.z),gz=terrainH(p.x,p.z+.25)-terrainH(p.x,p.z-.25);slope=Math.max(slope,Math.atan(Math.hypot(gx,gz)/.5)*180/Math.PI)}
  const elevations=points.map(p=>terrainH(p.x,p.z)),river=points.length?Math.min(...points.map(p=>riverDist(p.x,p.z))):Infinity;
- const clearance=rooms.length?Math.min(...rooms.map(r=>roomPad(r)+FLOOR-water)):null;
+ const clearance=rooms.length?Math.min(...rooms.map(r=>roomBase(r)+FLOOR-water)):null;
  // A door connects rooms only when its segment lies on both room edges;
  // room adjacency alone is never treated as a traversable route.
- const touches=(r,o)=>{const dx=Math.abs(o.x-r.x),dz=Math.abs(o.z-r.z),horizontal=Math.abs(Math.sin((o.rot||0)*Math.PI/180))<.5;return horizontal?Math.abs(dz-r.d/2)<.22&&dx+o.w/2<=r.w/2+.15:Math.abs(dx-r.w/2)<.22&&dz+o.w/2<=r.d/2+.15};
+ // Doors and windows only belong to rooms on their own floor.
+ const touches=(r,o)=>{if(lvl(r)!==lvl(o))return false;const dx=Math.abs(o.x-r.x),dz=Math.abs(o.z-r.z),horizontal=Math.abs(Math.sin((o.rot||0)*Math.PI/180))<.5;return horizontal?Math.abs(dz-r.d/2)<.22&&dx+o.w/2<=r.w/2+.15:Math.abs(dx-r.w/2)<.22&&dz+o.w/2<=r.d/2+.15};
  const graph=rooms.map(()=>new Set()),exitRooms=new Set();let exits=0;
- for(const o of objects.filter(o=>o.type==='Door'&&o.w>=.75)){const ids=rooms.map((r,i)=>touches(r,o)?i:-1).filter(i=>i>=0);if(ids.length===1){exits++;exitRooms.add(ids[0])}else if(ids.length===2){graph[ids[0]].add(ids[1]);graph[ids[1]].add(ids[0]);}}
+ for(const o of objects.filter(o=>o.type==='Door'&&o.w>=.75)){const ids=rooms.map((r,i)=>touches(r,o)?i:-1).filter(i=>i>=0);if(ids.length===1){if(!lvl(o)){exits++;exitRooms.add(ids[0])}}else if(ids.length===2){graph[ids[0]].add(ids[1]);graph[ids[1]].add(ids[0]);}}
  const reached=new Set(exitRooms),queue=[...reached];while(queue.length){const i=queue.shift();for(const j of graph[i])if(!reached.has(j)){reached.add(j);queue.push(j)}}
- const noWindow=rooms.filter(r=>!objects.some(o=>o.type==='Window'&&touches(r,o))).length,narrow=rooms.filter(r=>/hall/i.test(r.name)&&Math.min(r.w,r.d)<1.2).length,unreachable=rooms.length-reached.size;
- const beds=rooms.filter(r=>/bed/i.test(r.name)&&roomPad(r)+FLOOR<=water).length;
- const minX=Math.min(...rooms.map(r=>r.x-r.w/2)),maxX=Math.max(...rooms.map(r=>r.x+r.w/2)),minZ=Math.min(...rooms.map(r=>r.z-r.d/2)),maxZ=Math.max(...rooms.map(r=>r.z+r.d/2));
+ const noWindow=rooms.filter(r=>!objects.some(o=>o.type==='Window'&&touches(r,o))).length,narrow=rooms.filter(r=>/hall/i.test(r.name)&&Math.min(r.w,r.d)<1.2).length,unreachable=rooms.filter((r,i)=>!lvl(r)&&!reached.has(i)).length,upper=rooms.filter(r=>lvl(r)>0).length;
+ const beds=rooms.filter(r=>/bed/i.test(r.name)&&roomBase(r)+FLOOR<=water).length;
+ // The footprint check uses Floor 1, the part of the building that meets the ground.
+ const ground=rooms.filter(r=>!lvl(r));
+ const minX=Math.min(...ground.map(r=>r.x-r.w/2)),maxX=Math.max(...ground.map(r=>r.x+r.w/2)),minZ=Math.min(...ground.map(r=>r.z-r.d/2)),maxZ=Math.max(...ground.map(r=>r.z+r.d/2));
  // Sample occupancy in the bounding box; this avoids double-counting overlapping rooms.
- let occupied=0;for(let x=0;x<30;x++)for(let z=0;z<30;z++)if(rooms.some(r=>inRoom(r,minX+(x+.5)*(maxX-minX)/30,minZ+(z+.5)*(maxZ-minZ)/30,0)))occupied++;
- const irregular=rooms.length>0&&occupied/900<.75,large=rooms.some(r=>/garage/i.test(r.name))||objects.some(o=>o.type==='Door'&&o.w>2.4);
+ let occupied=0;for(let x=0;x<30;x++)for(let z=0;z<30;z++)if(ground.some(r=>inRoom(r,minX+(x+.5)*(maxX-minX)/30,minZ+(z+.5)*(maxZ-minZ)/30,0)))occupied++;
+ const irregular=ground.length>0&&occupied/900<.75,large=rooms.some(r=>/garage/i.test(r.name))||objects.some(o=>o.type==='Door'&&o.w>2.4);
  const hz=S.hazard?.results||{},floodClass=hz.flood?.level,landClass=hz.landslide?.level,surgeClass=hz.surge?.level;
  const terrainRisk=Math.min(100,(slope>25?55:slope>10?25:5)+(river<10?25:river<30?10:0)+(elevations.some(h=>h<water)?20:0));
  const structureRisk=Math.min(100,(S.site.wall>3.3?20:5)+(roof==='off'?25:roof==='gable'?15:5)+(irregular?25:0)+(large?20:0)+(clearance!==null&&clearance<.3?25:0));
@@ -1308,9 +1387,9 @@ function assessReadiness(rooms=S.rooms,objects=S.objects,roof=S.site.roof){
  const rating=n=>n>=60?'High':n>=30?'Medium':'Low';
  const flood=Math.max(clearance===null?50:clearance<0?80:clearance<.3?45:10,floodClass===3?80:floodClass===2?50:floodClass===1?25:0);
  const rows=[['Flood',rating(flood),clearance!==null&&clearance<.3?'Raise the floor at least '+(.3-clearance).toFixed(2)+' m for the selected water scenario and 0.3 m screening margin.':'Verify drainage, local flood datum and an evacuation route.'],['Landslide',rating(Math.max(terrainRisk,landClass===3?85:landClass===2?55:landClass===1?25:0)),'Obtain geotechnical slope review; move away from unstable slopes and river banks.'],['Storm surge',surgeClass==null?'Unknown':rating(surgeClass>=3?85:surgeClass===2?50:20),'Verify coastal evacuation and design elevation with local authorities.'],['Typhoon wind',rating(structureRisk),'Have an engineer design roof tie-downs, opening protection and the continuous load path.'],['Earthquake',rating(structureRisk+(irregular?15:0)),'Obtain PHIVOLCS fault/liquefaction screening and engineering review of walls and large openings.']];
- return {elevationRange:elevations.length?[Math.min(...elevations),Math.max(...elevations)]:null,score,rows,terrainRisk,structureRisk,planRisk,slope,river,clearance,exits,noWindow,narrow,unreachable,beds,irregular,large,points:rooms.map((r,i)=>({name:r.name,route:reached.has(i)})),hazardKnown:[floodClass,landClass,surgeClass].filter(v=>v!=null).length};
+ return {elevationRange:elevations.length?[Math.min(...elevations),Math.max(...elevations)]:null,score,rows,terrainRisk,structureRisk,planRisk,slope,river,clearance,exits,noWindow,narrow,unreachable,upper,beds,irregular,large,points:rooms.map((r,i)=>({name:(lvl(r)?floorName(lvl(r))+' · ':'')+r.name,route:lvl(r)?null:reached.has(i)})),hazardKnown:[floodClass,landClass,surgeClass].filter(v=>v!=null).length};
 }
-function renderReadiness(){const a=assessReadiness();$('readinessReport').innerHTML=`<b>Readiness ${a.score}/100 · ${a.hazardKnown}/3 hazard layers available</b><p>Flood and landslide ratings combine model assumptions and any available map class. Wind and earthquake ratings assess design features only; storm surge is unknown without a map. Higher scores mean fewer flagged features. These thresholds are illustrative, not code requirements.</p><p>Heuristic design score, not a probability or safety certification. Model terrain uses relative elevations; it is not a surveyed terrain model.</p><p>Area scores: terrain ${100-a.terrainRisk}; structure ${100-a.structureRisk}; floor plan ${100-a.planRisk} /100.</p><p>Terrain elevation ${a.elevationRange?a.elevationRange.map(v=>v.toFixed(2)).join('–')+' m':'no footprint'} · maximum sampled slope ${a.slope.toFixed(1)}° · river ${a.river<1e8?a.river.toFixed(1)+' m':'not drawn'} · floor clearance ${a.clearance===null?'no house':a.clearance.toFixed(2)+' m'} above selected water level.</p><p>${a.exits} modeled exits · ${a.narrow} hallways below 1.2 m · ${a.noWindow} rooms without modeled windows · ${a.beds} flood-exposed bedrooms · ${a.irregular?'irregular':'regular'} footprint · ${a.large?'large opening/garage':'no large opening detected'} · wall ${S.site.wall} m · roof ${esc(S.site.roof)}.</p>${a.rows.map(([h,r,f])=>`<p><b>${h}: ${r} risk</b><br>${esc(f)}</p>`).join('')}<p>${a.exits<2?'Add a second independent exterior exit. ':''}${a.unreachable?'Connect '+a.unreachable+' rooms to an exit with usable doors. ':''}${a.narrow?'Widen narrow hallways to at least the 1.2 m screening target. ':''}${a.noWindow?'Add suitable windows where missing. ':''}${a.beds?'Move flood-exposed bedrooms above the flood scenario.':''}</p><details><summary>Room-to-exit paths</summary>${a.points.map(p=>`<div>${esc(p.name)}: ${p.route?'door graph reaches an exterior exit':'no modeled route'}</div>`).join('')}<p>Connectivity ignores furniture blockage, door swing, stairs and travel distance. Check routes physically.</p></details><p>NOAH lot badges: ${['flood','landslide','surge'].map(k=>k+': '+(S.hazard?.results?.[k]?.level==null?'Unavailable':S.hazard.results[k].level===0?'Low':S.hazard.results[k].level===1?'Low':S.hazard.results[k].level===2?'Medium':'High')).join(' · ')}. Project NOAH and contributors. Earthquake rating is design-only; PHIVOLCS data is not connected.</p><p>This is a screening tool and does not replace an engineer’s assessment. Missing maps never mean no hazard.</p>`;}
+function renderReadiness(){const a=assessReadiness();$('readinessReport').innerHTML=`<b>Readiness ${a.score}/100 · ${a.hazardKnown}/3 hazard layers available</b><p>Flood and landslide ratings combine model assumptions and any available map class. Wind and earthquake ratings assess design features only; storm surge is unknown without a map. Higher scores mean fewer flagged features. These thresholds are illustrative, not code requirements.</p><p>Heuristic design score, not a probability or safety certification. Model terrain uses relative elevations; it is not a surveyed terrain model.</p><p>Area scores: terrain ${100-a.terrainRisk}; structure ${100-a.structureRisk}; floor plan ${100-a.planRisk} /100.</p><p>Terrain elevation ${a.elevationRange?a.elevationRange.map(v=>v.toFixed(2)).join('–')+' m':'no footprint'} · maximum sampled slope ${a.slope.toFixed(1)}° · river ${a.river<1e8?a.river.toFixed(1)+' m':'not drawn'} · floor clearance ${a.clearance===null?'no house':a.clearance.toFixed(2)+' m'} above selected water level.</p><p>${a.exits} modeled exits · ${a.narrow} hallways below 1.2 m · ${a.noWindow} rooms without modeled windows · ${a.beds} flood-exposed bedrooms · ${a.irregular?'irregular':'regular'} footprint · ${a.large?'large opening/garage':'no large opening detected'} · ${S.floors.length} storey${S.floors.length>1?'s':''} · wall ${S.site.wall} m · roof ${esc(S.site.roof)}.</p>${a.upper?`<p>${a.upper} room${a.upper>1?'s':''} on upper floors: routes between floors are not checked yet because stairs are not modeled. These rooms are left out of the exit check.</p>`:''}${a.rows.map(([h,r,f])=>`<p><b>${h}: ${r} risk</b><br>${esc(f)}</p>`).join('')}<p>${a.exits<2?'Add a second independent exterior exit. ':''}${a.unreachable?'Connect '+a.unreachable+' rooms to an exit with usable doors. ':''}${a.narrow?'Widen narrow hallways to at least the 1.2 m screening target. ':''}${a.noWindow?'Add suitable windows where missing. ':''}${a.beds?'Move flood-exposed bedrooms above the flood scenario.':''}</p><details><summary>Room-to-exit paths</summary>${a.points.map(p=>`<div>${esc(p.name)}: ${p.route===null?'not checked (upper floor; stairs not modeled yet)':p.route?'door graph reaches an exterior exit':'no modeled route'}</div>`).join('')}<p>Connectivity ignores furniture blockage, door swing, stairs and travel distance. Check routes physically.</p></details><p>NOAH lot badges: ${['flood','landslide','surge'].map(k=>k+': '+(S.hazard?.results?.[k]?.level==null?'Unavailable':S.hazard.results[k].level===0?'Low':S.hazard.results[k].level===1?'Low':S.hazard.results[k].level===2?'Medium':'High')).join(' · ')}. Project NOAH and contributors. Earthquake rating is design-only; PHIVOLCS data is not connected.</p><p>This is a screening tool and does not replace an engineer’s assessment. Missing maps never mean no hazard.</p>`;}
 $('readinessBtn').onclick=renderReadiness;
 async function fetchHazard(){const request=++hazardRequest;const lat=Number($('siteLat').value),lng=Number($('siteLng').value);if(!$('siteLat').value||!$('siteLng').value||!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180)return toast('Enter valid latitude and longitude');const period=Number($('hazardPeriod').value),surge=Number($('surgeScenario').value);S.location={lat,lng,period,surge};S.hazard=null;$('hazardStatus').textContent='Checking cached layers…';try{const r=await fetch(`hazard.php?lat=${lat}&lng=${lng}&period=${period}&surge=${surge}`),h=await r.json();if(!r.ok)throw Error(h.error||'Hazard lookup failed');if(request!==hazardRequest)return;S.hazard=h;const f=h.results.flood;if(f?.level===0){S.env.flood=0;syncUI();rebuild()}if(f?.level>0){const depth=f.depth_m??({1:.5,2:1.5,3:1.6}[f.level]);S.env.flood=depth;$('hazardStatus').textContent=`Flood scenario set to ${depth} m. `+(f.level===3?'Level 3 exceeds 1.5 m; 1.6 m is a lower-bound visualization, not a predicted depth.':'Class upper bound used unless measured depth is supplied.');syncUI();rebuild()}else $('hazardStatus').textContent='Lookup complete. '+Object.entries(h.results).map(([k,v])=>k+': '+v.status).join(' · ');renderReadiness();commit()}catch(e){if(request!==hazardRequest)return;$('hazardStatus').textContent=e.message;renderReadiness();commit()}}
 $('fetchHazard').onclick=fetchHazard;

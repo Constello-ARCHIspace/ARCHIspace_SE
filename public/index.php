@@ -471,6 +471,9 @@ function groundDatum(){if(datumCache!==null)return datumCache;const g=S.rooms.fi
 function roomBase(r){const L=lvl(r);return L?groundDatum()+stackH(L):roomPad(r)}
 // 0 = open to the sky, 1 = partly built over, 2 = fully built over (sampled on a 5×5 grid).
 function coverAbove(r){const L=lvl(r)+1,up=S.rooms.filter(o=>lvl(o)===L&&Math.abs(o.x-r.x)<(o.w+r.w)/2-.01&&Math.abs(o.z-r.z)<(o.d+r.d)/2-.01);if(!up.length)return 0;for(let i=0;i<5;i++)for(let j=0;j<5;j++){const x=r.x+(i/4-.5)*(r.w-.1),z=r.z+(j/4-.5)*(r.d-.1);if(!up.some(o=>inRoom(o,x,z,.01)))return 1}return 2}
+// Wall height of a room. With upper floors, every Floor 1 room reaches the same top line (the datum
+// plus Floor 1's height), so there is no gap under Floor 2 when Floor 1 rooms step with the terrain.
+function wallH(r){const L=lvl(r),h=floorH(L);return !L&&S.floors.length>1?h+Math.max(0,groundDatum()-roomPad(r)):h}
 function totalHeight(){return stackH(S.floors.length-1)+floorH(S.floors.length-1)+FLOOR}
 function floorTopAt(x,z,m=.12,L=0){let best=null;for(const r of S.rooms)if(lvl(r)===L&&inRoom(r,x,z,m)){const v=roomBase(r)+FLOOR;if(best===null||v>best)best=v}if(best!==null)return best;return L?groundDatum()+stackH(L)+FLOOR:terrainH(x,z)}
 
@@ -522,7 +525,7 @@ function buildRiver(){
 function buildFlood(){floodMesh=null;if(!S.env.sim||S.env.flood<=0)return;const m=new THREE.Mesh(new THREE.PlaneGeometry(S.site.width,S.site.depth),new THREE.MeshStandardMaterial({color:0x2f8fd0,transparent:true,opacity:.42,roughness:.1,metalness:.2,side:THREE.DoubleSide}));m.rotation.x=-Math.PI/2;m.position.y=S.site.ground+S.env.flood;world.add(m);floodMesh=m}
 function openingsOnWall(r,side){const out=[];const hz=side.horiz;for(const o of S.objects){if(!isOpening(o.type)||lvl(o)!==lvl(r))continue;const orient=Math.round(((o.rot%180)+180)%180)===0;if(orient!==hz)continue;let u=null;if(hz){if(Math.abs(o.z-(r.z+side.off))<.35&&Math.abs(o.x-r.x)<=r.w/2)u=o.x-r.x}else{if(Math.abs(o.x-(r.x+side.off))<.35&&Math.abs(o.z-r.z)<=r.d/2)u=-(o.z-r.z)}if(u!==null)out.push({u,w:o.w,e:o.e||0,h:o.h})}return out.sort((a,b)=>a.u-b.u)}
 function buildRoom(r){
- const g=new THREE.Group();g.userData={kind:'room',id:r.id};const L=lvl(r),pad=roomBase(r),wh=floorH(L);g.position.set(r.x,pad,r.z);
+ const g=new THREE.Group();g.userData={kind:'room',id:r.id};const L=lvl(r),pad=roomBase(r),wh=wallH(r);g.position.set(r.x,pad,r.z);
  if(!L){const low=Math.min(...roomSamples(r)),fh=Math.max(.25,pad-low+.35),fnd=new THREE.Mesh(new THREE.BoxGeometry(r.w+.3,fh,r.d+.3),mat('#8a8f96',{r:.95}));fnd.position.y=-fh/2;fnd.castShadow=fnd.receiveShadow=true;g.add(fnd)}
  const covered=coverAbove(r);
  const fl=new THREE.Mesh(new THREE.BoxGeometry(r.w,FLOOR,r.d),mat(shade(r.c,.78),{r:.55}));fl.position.y=FLOOR/2;fl.receiveShadow=true;fl.castShadow=true;g.add(fl);
@@ -533,7 +536,7 @@ function buildRoom(r){
   const geo=new THREE.ExtrudeGeometry(sh,{depth:T,bevelEnabled:false});geo.translate(0,0,-T/2);const m=new THREE.Mesh(geo,wm);m.castShadow=m.receiveShadow=true;m.position.set(sd.horiz?0:sd.off,FLOOR,sd.horiz?sd.off:0);m.rotation.y=sd.horiz?0:Math.PI/2;g.add(m)}
  if(covered===2){}
  // Partly built over: a flat slab (terrace) instead of a roof, flush with the floor above.
- else if(covered===1){if(S.site.roof!=='off'){const m=new THREE.Mesh(new THREE.BoxGeometry(r.w+.15,FLOOR-.01,r.d+.15),mat(S.site.roofColor,{r:.8}));m.position.y=FLOOR+wh+(FLOOR-.01)/2;m.castShadow=m.receiveShadow=true;m.userData.isRoof=true;roofMeshes.push(m);g.add(m)}}
+ else if(covered===1){const m=new THREE.Mesh(new THREE.BoxGeometry(r.w+T,FLOOR-.01,r.d+T),mat(shade(S.site.wallColor,.92),{r:.85}));m.position.y=FLOOR+wh+(FLOOR-.01)/2;m.castShadow=m.receiveShadow=true;g.add(m)}
  else if(S.site.roof==='flat'){const m=new THREE.Mesh(new THREE.BoxGeometry(r.w+.5,.2,r.d+.5),mat(S.site.roofColor,{r:.8}));m.position.y=FLOOR+wh+.1;m.castShadow=m.receiveShadow=true;m.userData.isRoof=true;roofMeshes.push(m);g.add(m)}
  else if(S.site.roof==='gable'){const rx=r.w>=r.d,span=(rx?r.d:r.w)+.7,len=(rx?r.w:r.d)+.7,rise=span*.26,sh=new THREE.Shape();sh.moveTo(-span/2,0);sh.lineTo(span/2,0);sh.lineTo(0,rise);sh.closePath();const geo=new THREE.ExtrudeGeometry(sh,{depth:len,bevelEnabled:false});geo.translate(0,0,-len/2);const m=new THREE.Mesh(geo,mat(S.site.roofColor,{r:.8}));m.rotation.y=rx?Math.PI/2:0;m.position.y=FLOOR+wh;m.castShadow=m.receiveShadow=true;m.userData.isRoof=true;roofMeshes.push(m);g.add(m)}
  world.add(g);
@@ -566,7 +569,7 @@ function buildModel(o){
 function buildObject(o){
  const g=buildModel(o);g.userData={kind:'object',id:o.id};g.position.set(o.x,floorTopAt(o.x,o.z,.12,lvl(o)),o.z);g.rotation.y=(o.rot||0)*Math.PI/180;world.add(g)}
 function applySelection3D(){if(selBox){scene.remove(selBox);selBox.geometry.dispose();selBox=null}if(!sel||!world)return;const g=world.children.find(c=>c.userData.kind===sel.kind&&c.userData.id===sel.id);if(g){selBox=new THREE.BoxHelper(g,0xf2b84b);scene.add(selBox)}}
-function syncLive(kind,it){const g=world.children.find(c=>c.userData.kind===kind&&c.userData.id===it.id);if(!g)return;g.position.x=it.x;g.position.z=it.z;if(kind==='object'){g.position.y=floorTopAt(it.x,it.z,.12,lvl(it));g.rotation.y=it.rot*Math.PI/180}else{const pad=roomBase(it);g.position.y=pad;const lb=world.children.find(c=>c.userData.labelFor===it.id);if(lb)lb.position.set(it.x,pad+FLOOR+floorH(lvl(it))+.7,it.z)}}
+function syncLive(kind,it){const g=world.children.find(c=>c.userData.kind===kind&&c.userData.id===it.id);if(!g)return;g.position.x=it.x;g.position.z=it.z;if(kind==='object'){g.position.y=floorTopAt(it.x,it.z,.12,lvl(it));g.rotation.y=it.rot*Math.PI/180}else{const pad=roomBase(it);g.position.y=pad;const lb=world.children.find(c=>c.userData.labelFor===it.id);if(lb)lb.position.set(it.x,pad+FLOOR+wallH(it)+.7,it.z)}}
 
 /* ---------- environment ---------- */
 function applyEnv(){

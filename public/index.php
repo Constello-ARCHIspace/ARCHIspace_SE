@@ -139,6 +139,7 @@ canvas#plan2d{display:none;cursor:default}
 .floor-row{display:flex;gap:6px;align-items:center;margin-bottom:8px}.floor-row select{flex:1}
 .floor-actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin:8px 0}.floor-actions button{padding:6px 4px;font-size:11.5px}
 #floorSelect{width:auto;min-width:118px;padding:5px 8px}
+.show-pick{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600}.show-pick select{width:auto;min-width:150px;padding:5px 8px}
 /* blueprint upload styles */
 .bp-dropzone{border:2px dashed var(--line2);border-radius:14px;padding:28px 16px;text-align:center;transition:.2s;cursor:pointer;background:transparent}
 .bp-dropzone:hover,.bp-dropzone.dragover{border-color:var(--accent);background:#f2b84b0a}
@@ -289,7 +290,7 @@ canvas#plan2d{display:none;cursor:default}
     <div class="seg"><button id="v3d" class="on">3D model</button><button id="v2d">2D plan</button><button id="vTop">Top</button></div>
     <select id="floorSelect" aria-label="Floor shown in the plan"></select>
     <div class="seg"><button id="gridBtn" class="on">Grid</button><button id="snapBtn" class="on">Snap</button><button id="labelBtn" class="on">Labels</button></div>
-    <button id="roofToggleBtn" aria-pressed="true" title="Show or hide the roof">Roof: Shown</button>
+    <label class="show-pick" title="Choose which floors and roof to show in 3D and Top views"><span>Show</span><select id="showSelect" aria-label="Floors and roof shown"></select></label>
     <select id="compareMode" aria-label="Compare design"><option value="off">Comparison off</option><option value="ghost">Ghost suggestion</option><option value="split">Split plans</option></select><button id="fitBtn">⤢ Fit</button>
     <div class="sp"></div>
     <button id="playBtn" class="primary"><img src="assets/figma/studio-imgPlay.svg" alt="">Walk through</button>
@@ -814,20 +815,20 @@ cv3.addEventListener('pointerup',end3D);cv3.addEventListener('pointercancel',end
 cv3.addEventListener('wheel',e=>{e.preventDefault();if(playMode)return;cam.dist=clamp(cam.dist*(e.deltaY>0?1.08:.92),6,400);updateCam()},{passive:false});
 document.addEventListener('pointerlockchange',()=>{if(playMode&&document.pointerLockElement!==cv3&&!drag)exitPlay()});
 
-/* ---------- roof visibility ---------- */
+/* ---------- Show: floors and roof ---------- */
+// View only; never changes the design. 'all' = whole building, 'noroof' = without roof,
+// a number N = cutaway showing Floor 1 up to Floor N+1 with no roof. roofOverride holds the
+// user's choice and resets to the view's default (3D: whole building, Top: without roof) on view change.
+function showMode(){const m=roofOverride===null?(view==='top'?'noroof':'all'):roofOverride;return typeof m==='number'&&m>=S.floors.length-1?'noroof':m}
 function updateRoofVisibility(){
- const configured=S.site.roof!=='off';
- const modeSupported=view==='3d'||view==='top';
- const visible=configured&&modeSupported&&(roofOverride===null?view==='3d':roofOverride);
- roofMeshes.forEach(mesh=>mesh.visible=visible);
- const button=$('roofToggleBtn');
- button.disabled=!configured||!modeSupported;
- button.classList.toggle('on',visible);
- button.setAttribute('aria-pressed',String(visible));
- button.textContent=visible?'Roof: Shown':'Roof: Hidden';
- button.title=!configured?'Choose Flat roof or Gable roof in Site → Building first':
-  !modeSupported?'Roof toggle is available in 3D and Top views':
-  `Click to ${visible?'hide':'show'} the roof in ${view==='top'?'Top':'3D'} view`;
+ const modeSupported=view==='3d'||view==='top',m=showMode(),maxL=typeof m==='number'?m:Infinity;
+ roofMeshes.forEach(mesh=>mesh.visible=modeSupported&&m==='all');
+ if(world){const levelOf=c=>{const ud=c.userData||{};if(ud.kind==='room'||ud.labelFor!==undefined){const r=S.rooms.find(x=>x.id===(ud.kind==='room'?ud.id:ud.labelFor));return r?lvl(r):0}if(ud.kind==='object'){const o=S.objects.find(x=>x.id===ud.id);return o?lvl(o):0}return 0};
+  for(const c of world.children)if(c.userData&&(c.userData.kind==='room'||c.userData.kind==='object'||c.userData.labelFor!==undefined))c.visible=levelOf(c)<=maxL}
+ const sel=$('showSelect'),opts=[['all','Whole building'],['noroof','Without roof'],...(S.floors.length>1?S.floors.slice(0,-1).map((_,i)=>[String(i),'Up to '+floorName(i)]):[])];
+ if(sel.options.length!==opts.length||[...sel.options].some((o,i)=>o.value!==opts[i][0]||o.text!==opts[i][1]))sel.replaceChildren(...opts.map(([v,t])=>new Option(t,v)));
+ sel.value=String(m);sel.disabled=!modeSupported;
+ sel.title=!modeSupported?'Available in 3D and Top views; the 2D plan already shows one floor at a time':S.site.roof==='off'?'No roof style is set (Site → Building), so Whole building and Without roof look the same':'Choose which floors and roof to show';
 }
 
 /* ---------- views ---------- */
@@ -857,7 +858,7 @@ $('v3d').onclick=()=>setView('3d');$('v2d').onclick=()=>setView('2d');$('vTop').
 $('gridBtn').onclick=()=>{showGrid=!showGrid;$('gridBtn').classList.toggle('on',showGrid);if(stageGrid)stageGrid.visible=showGrid;draw2D()};
 $('snapBtn').onclick=()=>{snapOn=!snapOn;$('snapBtn').classList.toggle('on',snapOn);toast('Snap '+(snapOn?'on (0.25 m grid, wall & edge snapping)':'off'))};
 $('labelBtn').onclick=()=>{showLabels=!showLabels;$('labelBtn').classList.toggle('on',showLabels);rebuild()};
-$('roofToggleBtn').onclick=()=>{if(S.site.roof==='off'||view==='2d')return;const currentlyVisible=roofOverride===null?view==='3d':roofOverride;roofOverride=!currentlyVisible;updateRoofVisibility()};
+$('showSelect').onchange=e=>{if(view==='2d')return;const v=e.target.value;roofOverride=v==='all'||v==='noroof'?v:clamp(Number(v)||0,0,S.floors.length-1);updateRoofVisibility();toast(v==='all'?'Showing the whole building':v==='noroof'?'Roof hidden':'Showing '+floorName(0)+(Number(v)?' to '+floorName(Number(v)):'')+' — floors above and the roof are hidden')};
 $('fitBtn').onclick=()=>{if(view==='2d'){fit2D();draw2D()}else fitCamera(view==='top')};
 $('playBtn').onclick=()=>playMode?exitPlay():enterPlay();
 $('undoBtn').onclick=undo;$('redoBtn').onclick=redo;

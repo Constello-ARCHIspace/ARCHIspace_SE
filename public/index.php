@@ -416,8 +416,19 @@ const CAT={
  Fridge:{g:'Kitchen & bath',w:.7,d:.7,h:1.8,e:0,c:'#d6dde4'},
  Tree:{g:'Outdoor',w:2,d:2,h:4.5,e:0,c:'#3f8f5a',out:1},
  Bush:{g:'Outdoor',w:1.1,d:1.1,h:.8,e:0,c:'#4c8f4a',out:1},
- Car:{g:'Outdoor',w:1.9,d:4.4,h:1.45,e:0,c:'#9b3d3d',out:1}
+ Car:{g:'Outdoor',w:1.9,d:4.4,h:1.45,e:0,c:'#9b3d3d',out:1},
+ // Stairs connect the floor they are placed on to the floor above. An outside stair is
+ // placed on the upper floor it serves and runs down to the ground beside the building.
+ Stair:{g:'Stairs & exits',w:1,d:3,h:3,e:0,c:'#b9a284',stair:'inside'},
+ 'Fire exit stair':{g:'Stairs & exits',w:1.2,d:3.6,h:3,e:0,c:'#c8574d',stair:'fire'},
+ 'Outside stair':{g:'Stairs & exits',w:1,d:3,h:3,e:0,c:'#8e9aa8',stair:'outside'},
+ Elevator:{g:'Stairs & exits',w:1.6,d:1.6,h:3,e:0,c:'#7d8aa0',stair:'lift'}
 };
+const stairKind=o=>CAT[o.type]?.stair||null;
+const isStair=o=>stairKind(o)==='inside'||stairKind(o)==='fire';
+// Axis-aligned half sizes after rotation (rotations are multiples of 90°).
+const halfWD=o=>Math.round(((o.rot||0)%180+180)%180)===90?[o.d/2,o.w/2]:[o.w/2,o.d/2];
+function distToItem(o,x,z){const[hw,hd]=halfWD(o);return Math.hypot(Math.max(0,Math.abs(x-o.x)-hw),Math.max(0,Math.abs(z-o.z)-hd))}
 const isOpening=t=>t==='Door'||t==='Window';
 const PAL={grass:[[72,116,62],[132,170,92]],sand:[[190,168,120],[226,208,156]],stone:[[100,108,118],[158,166,176]],soil:[[110,82,58],[160,126,92]],snow:[[198,208,222],[247,251,255]]};
 
@@ -528,7 +539,7 @@ function buildRoom(r){
  const g=new THREE.Group();g.userData={kind:'room',id:r.id};const L=lvl(r),pad=roomBase(r),wh=wallH(r);g.position.set(r.x,pad,r.z);
  if(!L){const low=Math.min(...roomSamples(r)),fh=Math.max(.25,pad-low+.35),fnd=new THREE.Mesh(new THREE.BoxGeometry(r.w+.3,fh,r.d+.3),mat('#8a8f96',{r:.95}));fnd.position.y=-fh/2;fnd.castShadow=fnd.receiveShadow=true;g.add(fnd)}
  const covered=coverAbove(r);
- const fl=new THREE.Mesh(new THREE.BoxGeometry(r.w,FLOOR,r.d),mat(shade(r.c,.78),{r:.55}));fl.position.y=FLOOR/2;fl.receiveShadow=true;fl.castShadow=true;g.add(fl);
+ const fl=slabMesh(r,L?openingsBelow(r,L-1):[],shade(r.c,.78));fl.receiveShadow=true;fl.castShadow=true;g.add(fl);
  const wm=mat(S.site.wallColor,{r:.9});
  const sides=[{horiz:true,off:-r.d/2,L:r.w+T},{horiz:true,off:r.d/2,L:r.w+T},{horiz:false,off:-r.w/2,L:r.d-T},{horiz:false,off:r.w/2,L:r.d-T}];
  for(const sd of sides){const L=sd.L,sh=new THREE.Shape();sh.moveTo(-L/2,0);sh.lineTo(L/2,0);sh.lineTo(L/2,wh);sh.lineTo(-L/2,wh);sh.closePath();
@@ -536,7 +547,7 @@ function buildRoom(r){
   const geo=new THREE.ExtrudeGeometry(sh,{depth:T,bevelEnabled:false});geo.translate(0,0,-T/2);const m=new THREE.Mesh(geo,wm);m.castShadow=m.receiveShadow=true;m.position.set(sd.horiz?0:sd.off,FLOOR,sd.horiz?sd.off:0);m.rotation.y=sd.horiz?0:Math.PI/2;g.add(m)}
  if(covered===2){}
  // Partly built over: a flat slab (terrace) instead of a roof, flush with the floor above.
- else if(covered===1){const m=new THREE.Mesh(new THREE.BoxGeometry(r.w+T,FLOOR-.01,r.d+T),mat(shade(S.site.wallColor,.92),{r:.85}));m.position.y=FLOOR+wh+(FLOOR-.01)/2;m.castShadow=m.receiveShadow=true;g.add(m)}
+ else if(covered===1){const m=slabMesh(r,openingsBelow(r,L),shade(S.site.wallColor,.92),T);m.position.y+=FLOOR+wh;m.castShadow=m.receiveShadow=true;g.add(m)}
  else if(S.site.roof==='flat'){const m=new THREE.Mesh(new THREE.BoxGeometry(r.w+.5,.2,r.d+.5),mat(S.site.roofColor,{r:.8}));m.position.y=FLOOR+wh+.1;m.castShadow=m.receiveShadow=true;m.userData.isRoof=true;roofMeshes.push(m);g.add(m)}
  else if(S.site.roof==='gable'){const rx=r.w>=r.d,span=(rx?r.d:r.w)+.7,len=(rx?r.w:r.d)+.7,rise=span*.26,sh=new THREE.Shape();sh.moveTo(-span/2,0);sh.lineTo(span/2,0);sh.lineTo(0,rise);sh.closePath();const geo=new THREE.ExtrudeGeometry(sh,{depth:len,bevelEnabled:false});geo.translate(0,0,-len/2);const m=new THREE.Mesh(geo,mat(S.site.roofColor,{r:.8}));m.rotation.y=rx?Math.PI/2:0;m.position.y=FLOOR+wh;m.castShadow=m.receiveShadow=true;m.userData.isRoof=true;roofMeshes.push(m);g.add(m)}
  world.add(g);
@@ -563,13 +574,34 @@ function buildModel(o){
  case'Fridge':box(w,h,d,0,0,0,c);box(w-.02,.012,.01,0,h*.66,d/2+.003,'#8c97a3');box(.03,.5,.03,w/2-.08,h*.7,d/2+.02,'#8a949e');box(.03,.3,.03,w/2-.08,h*.3,d/2+.02,'#8a949e');break;
  case'Tree':{const s=w/2;cyl(.1*s,.17*s,h*.38,0,0,0,'#7a5639',8);const tiers=[[.52,.46,.28],[.4,.38,.5],[.28,.32,.7]];tiers.forEach(([rr,hh,yy],i)=>{const m=new THREE.Mesh(new THREE.ConeGeometry(w*rr,h*hh,9),mat(shade(c,1-i*.08),{flat:1,r:.9}));m.position.y=h*yy+h*hh*.35;m.castShadow=true;g.add(m)})}break;
  case'Bush':{const m=new THREE.Mesh(new THREE.IcosahedronGeometry(w/2,1),mat(c,{flat:1,r:.95}));m.scale.y=h/w;m.position.y=h/2;m.castShadow=true;g.add(m)}break;
+ case'Stair':case'Fire exit stair':case'Outside stair':{const rise=stairRise(o),n=Math.max(3,Math.round(rise/.18)),run=d/n;
+  // Solid flight: the bottom step is at +d/2 and the flight climbs toward -d/2.
+  for(let i=0;i<n;i++)box(w,rise*(i+1)/n,run+.005,0,0,d/2-(i+.5)*run,shade(c,1-(i%2)*.06),{r:.85});
+  if(o.type==='Fire exit stair'){const op={t:.28,r:.6};box(.06,rise+.9,d,-w/2-.03,0,0,c,op);box(.06,rise+.9,d,w/2+.03,0,0,c,op);box(w+.12,rise+.9,.06,0,0,-d/2-.03,c,op)}
+  else for(const sx of[-1,1]){box(.04,.9,.04,sx*(w/2-.03),0,d/2-.05,'#5b6470');box(.04,.9,.04,sx*(w/2-.03),rise,-d/2+.05,'#5b6470')}
+  // Guard railing around the floor opening on the floor above: both long sides and the low end.
+  if(o.type==='Stair'&&lvl(o)<S.floors.length-1){const rc='#4a5560',rh=.95,y=rise;for(const sx of[-1,1]){box(.05,.05,d,sx*(w/2+.05),y+rh,0,rc);for(const pz of[-d/2,0,d/2])box(.04,rh,.04,sx*(w/2+.05),y,pz,rc)}box(w+.1,.05,.05,0,y+rh,d/2+.05,rc);box(.04,rh,.04,0,y,d/2+.05,rc)}
+  break}
+ case'Elevator':{const rise=stairRise(o);box(w,rise,d,0,0,0,c,{t:.45,r:.3,m:.3});box(w*.6,2.1,.04,0,0,d/2+.02,'#c9d1db',{m:.7,r:.3});break}
  case'Car':box(w,.5,d,0,.28,0,c,{m:.5,r:.3});box(w*.86,.46,d*.5,0,.78,-d*.04,shade(c,.9),{m:.4,r:.3});box(w*.82,.34,d*.46,0,.84,-d*.04,'#1b2733',{r:.1,m:.6});for(const sx of[-1,1])for(const sz of[-1,1]){const m=new THREE.Mesh(new THREE.CylinderGeometry(.33,.33,.22,14),mat('#15181c'));m.rotation.z=Math.PI/2;m.position.set(sx*(w/2-.05),.33,sz*(d/2-.85));m.castShadow=true;g.add(m)}break;
  }
  return g}
+// Height a stair or lift climbs: to the floor above, or for an outside stair from the ground to its floor.
+const floorTop=L=>groundDatum()+stackH(L)+FLOOR;
+function stairRise(o){const L=lvl(o);if(stairKind(o)==='outside')return Math.max(.3,floorTop(L)-terrainH(o.x,o.z));if(L>=S.floors.length-1)return floorH(L);return Math.max(.5,floorTop(L+1)-objBaseY(o))}
+// Stairs and lifts on floor L cut an opening in the floor above them.
+const openingsBelow=(r,L)=>S.objects.filter(o=>lvl(o)===L&&(isStair(o)||stairKind(o)==='lift')&&inRoom(r,o.x,o.z,0));
+// A floor slab with rectangular openings, spanning y 0..FLOOR in the room's local space.
+function slabMesh(r,holes,color,pad=0){
+ if(!holes.length){const m=new THREE.Mesh(new THREE.BoxGeometry(r.w+pad,FLOOR-(pad?.01:0),r.d+pad),mat(color,{r:.55}));m.position.y=(FLOOR-(pad?.01:0))/2;return m}
+ const hw0=(r.w+pad)/2,hd0=(r.d+pad)/2,sh=new THREE.Shape();sh.moveTo(-hw0,hd0);sh.lineTo(hw0,hd0);sh.lineTo(hw0,-hd0);sh.lineTo(-hw0,-hd0);sh.closePath();
+ for(const o of holes){const[hw,hd]=halfWD(o),x0=Math.max(-hw0+.05,o.x-r.x-hw),x1=Math.min(hw0-.05,o.x-r.x+hw),z0=Math.max(-hd0+.05,o.z-r.z-hd),z1=Math.min(hd0-.05,o.z-r.z+hd);if(x1-x0<.2||z1-z0<.2)continue;const h=new THREE.Path();h.moveTo(x0,-z0);h.lineTo(x0,-z1);h.lineTo(x1,-z1);h.lineTo(x1,-z0);h.closePath();sh.holes.push(h)}
+ const geo=new THREE.ExtrudeGeometry(sh,{depth:FLOOR-(pad?.01:0),bevelEnabled:false});geo.rotateX(-Math.PI/2);return new THREE.Mesh(geo,mat(color,{r:.55}))}
+const objBaseY=o=>stairKind(o)==='outside'?terrainH(o.x,o.z):floorTopAt(o.x,o.z,.12,lvl(o));
 function buildObject(o){
- const g=buildModel(o);g.userData={kind:'object',id:o.id};g.position.set(o.x,floorTopAt(o.x,o.z,.12,lvl(o)),o.z);g.rotation.y=(o.rot||0)*Math.PI/180;world.add(g)}
+ const g=buildModel(o);g.userData={kind:'object',id:o.id};g.position.set(o.x,objBaseY(o),o.z);g.rotation.y=(o.rot||0)*Math.PI/180;world.add(g)}
 function applySelection3D(){if(selBox){scene.remove(selBox);selBox.geometry.dispose();selBox=null}if(!sel||!world)return;const g=world.children.find(c=>c.userData.kind===sel.kind&&c.userData.id===sel.id);if(g){selBox=new THREE.BoxHelper(g,0xf2b84b);scene.add(selBox)}}
-function syncLive(kind,it){const g=world.children.find(c=>c.userData.kind===kind&&c.userData.id===it.id);if(!g)return;g.position.x=it.x;g.position.z=it.z;if(kind==='object'){g.position.y=floorTopAt(it.x,it.z,.12,lvl(it));g.rotation.y=it.rot*Math.PI/180}else{const pad=roomBase(it);g.position.y=pad;const lb=world.children.find(c=>c.userData.labelFor===it.id);if(lb)lb.position.set(it.x,pad+FLOOR+wallH(it)+.7,it.z)}}
+function syncLive(kind,it){const g=world.children.find(c=>c.userData.kind===kind&&c.userData.id===it.id);if(!g)return;g.position.x=it.x;g.position.z=it.z;if(kind==='object'){g.position.y=objBaseY(it);g.rotation.y=it.rot*Math.PI/180}else{const pad=roomBase(it);g.position.y=pad;const lb=world.children.find(c=>c.userData.labelFor===it.id);if(lb)lb.position.set(it.x,pad+FLOOR+wallH(it)+.7,it.z)}}
 
 /* ---------- environment ---------- */
 function applyEnv(){
@@ -627,12 +659,15 @@ function freeSpot(w,d,L=curFloor){const sw=S.site.width,sd=S.site.depth,c=[];for
 
 /* ---------- add / remove ---------- */
 function addRoom(type){if(S.rooms.length>=MAX_ROOMS)return toast('A project can have up to '+MAX_ROOMS+' rooms');const p=ROOMS[type]||ROOMS.Custom,pos=freeSpot(p.w,p.d),r={id:S.nextId++,name:type==='Custom'?'Room':type,w:p.w,d:p.d,c:p.c,x:pos.x,z:pos.z,level:curFloor};S.rooms.push(r);select({kind:'room',id:r.id});rebuild();commit();renderPanels();toast(r.name+' added to '+floorName(curFloor)+' — drag to position, edit size in the inspector')}
-function addObject(type){const c=CAT[type],o={id:S.nextId++,type,x:0,z:0,rot:0,w:c.w,d:c.d,h:c.h,e:c.e,level:c.out?0:curFloor};
+function addObject(type){const c=CAT[type];if(c.stair==='outside'&&!curFloor)return toast('An outside stair belongs to the upper floor it reaches. Switch to Floor 2 or higher, then add it beside a door.');
+ const o={id:S.nextId++,type,x:0,z:0,rot:0,w:c.w,d:c.d,h:c.h,e:c.e,level:c.out?0:curFloor};
  const fr=S.rooms.filter(r=>lvl(r)===o.level),selRoom=sel&&sel.kind==='room'&&lvl(getItem(sel))===o.level?getItem(sel):(sel&&getItem(sel)&&lvl(getItem(sel))===o.level?fr.find(r=>inRoom(r,getItem(sel).x,getItem(sel).z,0)):null),room=selRoom||fr[fr.length-1];
- if(isOpening(type)&&room){const side=type==='Door'?{n:'s',z:room.z+room.d/2,rot:180}:{n:'n',z:room.z-room.d/2,rot:0},L=room.w;let px=room.x;for(const off of[0,-1.4,1.4,-2.8,2.8,-4.2,4.2]){const x=room.x+off;if(Math.abs(off)+o.w/2+.2>L/2)continue;if(!S.objects.some(q=>isOpening(q.type)&&lvl(q)===o.level&&Math.abs(q.z-side.z)<.3&&Math.abs(q.x-x)<(q.w+o.w)/2+.1)){px=x;break}}o.x=px;o.z=side.z;o.rot=side.rot}
+ if(c.stair==='outside'){if(fr.length){const b=roomLayoutBounds(fr);o.x=clamp(b.x1+o.w/2+.2,-S.site.width/2+o.w/2,S.site.width/2-o.w/2);o.z=clamp((b.z0+b.z1)/2,-S.site.depth/2+o.d/2,S.site.depth/2-o.d/2)}}
+ else if(isOpening(type)&&room){const side=type==='Door'?{n:'s',z:room.z+room.d/2,rot:180}:{n:'n',z:room.z-room.d/2,rot:0},L=room.w;let px=room.x;for(const off of[0,-1.4,1.4,-2.8,2.8,-4.2,4.2]){const x=room.x+off;if(Math.abs(off)+o.w/2+.2>L/2)continue;if(!S.objects.some(q=>isOpening(q.type)&&lvl(q)===o.level&&Math.abs(q.z-side.z)<.3&&Math.abs(q.x-x)<(q.w+o.w)/2+.1)){px=x;break}}o.x=px;o.z=side.z;o.rot=side.rot}
  else if(c.out||!room){const rw=S.river.width/2;let ok=false;for(let i=0;i<80&&!ok;i++){const x=(Math.random()-.5)*(S.site.width-3),z=(Math.random()-.5)*(S.site.depth-3);if(S.rooms.some(r=>inRoom(r,x,z,1.2)))continue;if(S.river.pts.length>1&&riverDist(x,z)<rw+1.2)continue;o.x=Math.round(x*2)/2;o.z=Math.round(z*2)/2;ok=true}}
  else{let done=false;const rad=Math.max(c.w,c.d)/2;for(let r=0;r<=2&&!done;r+=.5)for(let a=0;a<12&&!done;a++){const x=room.x+Math.cos(a)*r,z=room.z+Math.sin(a)*r;if(Math.abs(x-room.x)>room.w/2-rad-.1||Math.abs(z-room.z)>room.d/2-rad-.1)continue;if(S.objects.some(q=>lvl(q)===o.level&&!isOpening(q.type)&&q.type!=='Rug'&&Math.hypot(q.x-x,q.z-z)<rad+Math.max(q.w,q.d)/2-.1))continue;o.x=Math.round(x*4)/4;o.z=Math.round(z*4)/4;done=true}if(!done){o.x=room.x;o.z=room.z}}
- S.objects.push(o);select({kind:'object',id:o.id});rebuild();commit();renderPanels();toast(type+' added'+(c.out&&curFloor?' at ground level':''))}
+ S.objects.push(o);select({kind:'object',id:o.id});rebuild();commit();renderPanels();
+ toast(c.stair==='outside'?'Outside stair added beside '+floorName(o.level)+' — drag it next to a door on an outer wall':(c.stair==='inside'||c.stair==='fire')&&o.level>=S.floors.length-1?type+' added — add a floor above for it to reach':c.stair?type+' added — it rises to '+floorName(o.level+1)+'; place it inside a room on both floors':type+' added'+(c.out&&curFloor?' at ground level':''))}
 function removeSel(){if(!sel)return;if(sel.kind==='room')S.rooms=S.rooms.filter(r=>r.id!==sel.id);else S.objects=S.objects.filter(o=>o.id!==sel.id);sel=null;rebuild();commit();renderPanels()}
 function dupSel(){const it=getItem(sel);if(!it)return;if(sel.kind==='room'&&S.rooms.length>=MAX_ROOMS)return toast('A project can have up to '+MAX_ROOMS+' rooms');const n=JSON.parse(JSON.stringify(it));n.id=S.nextId++;n.x+=.75;n.z+=.75;if(sel.kind==='room'){clampRoom(n);S.rooms.push(n)}else S.objects.push(n);select({kind:sel.kind,id:n.id});rebuild();commit();renderPanels()}
 function rotSel(){const it=getItem(sel);if(!it||sel.kind==='room'){if(it){[it.w,it.d]=[it.d,it.w];clampRoom(it);rebuild();commit();renderPanels()}return}it.rot=(it.rot+90)%360;rebuild();commit();renderPanels()}
@@ -665,6 +700,8 @@ function sym(ctx,type,w,d,col,lw){const hw=w/2,hd=d/2;ctx.lineWidth=lw||1.2;ctx.
  case'Tree':ctx.fillStyle='#4f9a6299';C(0,0,hw);ctx.fillStyle='#5fb17a66';C(0,0,hw*.62);ctx.fillStyle='#8a5a38';C(0,0,Math.max(1.5,hw*.1));break;
  case'Bush':ctx.fillStyle='#5a9a50aa';for(let i=0;i<7;i++){const a=i*Math.PI*2/7;C(Math.cos(a)*hw*.5,Math.sin(a)*hd*.5,hw*.5)}C(0,0,hw*.55);break;
  case'Car':R(-hw,-hd,w,d,Math.min(hw,hd)*.45);R(-hw*.78,-hd*.5,w*.78,d*.2,3);R(-hw*.78,hd*.35,w*.78,d*.15,3);break;
+ case'Stair':case'Fire exit stair':case'Outside stair':{R(-hw,-hd,w,d,1);const n=Math.max(4,Math.round(d/Math.max(4,lw*6)));for(let i=1;i<n;i++)L(-hw,-hd+d*i/n,hw,-hd+d*i/n);ctx.lineWidth=(lw||1.2)*1.4;L(0,hd*.85,0,-hd*.75);L(0,-hd*.75,-hw*.45,-hd*.45);L(0,-hd*.75,hw*.45,-hd*.45);break}
+ case'Elevator':R(-hw,-hd,w,d,1);L(-hw,-hd,hw,hd);L(hw,-hd,-hw,hd);break;
  case'Door':L(-hw,0,-hw,w);ctx.beginPath();ctx.arc(-hw,0,w,0,Math.PI/2);ctx.stroke();break;
  case'Window':L(-hw,-lw*1.5,hw,-lw*1.5);L(-hw,0,hw,0);L(-hw,lw*1.5,hw,lw*1.5);break;
  default:R(-hw,-hd,w,d,2)}}
@@ -686,6 +723,8 @@ function draw2D(){
  fRooms.forEach(r=>{const cx=pv.ox+r.x*s,cy=pv.oy+r.z*s;ctx.fillStyle='#0b1118';ctx.textAlign='center';ctx.font='700 '+clamp(s*.42,10,15)+'px Inter,system-ui,sans-serif';ctx.fillText(r.name,cx,cy-(s>9?-0:0)-Math.min(10,s*.3),Math.max(30,r.w*s-8));ctx.font='500 '+clamp(s*.32,9,12)+'px "JetBrains Mono",monospace';ctx.globalAlpha=.75;ctx.fillText((r.w*r.d).toFixed(1)+' m²',cx,cy+Math.min(10,s*.38)+2,Math.max(30,r.w*s-8));ctx.globalAlpha=1});
  const drawObj=o=>{ctx.save();ctx.translate(pv.ox+o.x*s,pv.oy+o.z*s);ctx.rotate(-(o.rot||0)*Math.PI/180);const w=o.w*s,d=Math.max(o.d*s,2);
   if(isOpening(o.type)){ctx.fillStyle=o.type==='Window'?'#1c2a3a':bgGap;ctx.fillRect(-w/2,-(T*s/2+1),w,T*s+2);sym(ctx,o.type,w,d,o.type==='Door'?'#c08850':'#7ed7ef',Math.max(1,s*.07))}else sym(ctx,o.type,w,d,o.color||CAT[o.type].c,Math.max(1,Math.min(1.8,s*.1)));ctx.restore()};
+ if(curFloor>0){ctx.save();ctx.setLineDash([4,3]);ctx.strokeStyle='#24372f';ctx.lineWidth=1.5;ctx.fillStyle='#24372f';ctx.font='600 11px Inter,system-ui,sans-serif';ctx.textAlign='center';
+  for(const o of S.objects.filter(o=>lvl(o)===curFloor-1&&(isStair(o)||stairKind(o)==='lift'))){const[hw,hd]=halfWD(o);ctx.strokeRect(pv.ox+(o.x-hw)*s,pv.oy+(o.z-hd)*s,hw*2*s,hd*2*s);ctx.fillText(stairKind(o)==='lift'?'Lift':'↑ from '+floorName(curFloor-1),pv.ox+o.x*s,pv.oy+o.z*s+4)}ctx.restore()}
  fObjs.filter(o=>o.type==='Rug').forEach(drawObj);fObjs.filter(o=>o.type!=='Rug'&&!isOpening(o.type)).forEach(drawObj);fObjs.filter(o=>isOpening(o.type)).forEach(drawObj);
  const it=getItem(sel);
  if(it){ctx.strokeStyle='#3d6652';ctx.lineWidth=2;ctx.setLineDash([6,4]);if(sel.kind==='room'){const x=pv.ox+(it.x-it.w/2)*s,y=pv.oy+(it.z-it.d/2)*s;ctx.strokeRect(x-3,y-3,it.w*s+6,it.d*s+6);ctx.setLineDash([]);ctx.fillStyle='#3d6652';ctx.beginPath();ctx.arc(x+it.w*s,y+it.d*s,7,0,7);ctx.fill();ctx.strokeStyle='#17120a';ctx.lineWidth=1.5;ctx.stroke();
@@ -728,7 +767,7 @@ function groundPt(e,y){raycaster.setFromCamera(ndc(e),camera);const ry=raycaster
 cv3.addEventListener('pointerdown',e=>{cv3.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});if(ptrs.size===2){const[a,b]=[...ptrs.values()];pinch=Math.hypot(a.x-b.x,a.y-b.y);drag={mode:'pinch'};return}
  if(playMode){if(document.pointerLockElement!==cv3)cv3.requestPointerLock?.();drag={mode:'look'};return}
  const hit=e.button===0?pick3D(e):null;
- if(hit){select(hit);const it=getItem(hit),y=hit.kind==='room'?roomBase(it)+FLOOR:floorTopAt(it.x,it.z,.12,lvl(it)),p=groundPt(e,y);drag={mode:'move',kind:hit.kind,id:hit.id,y,ox:p?p.x-it.x:0,oz:p?p.z-it.z:0,moved:false};toast('Selected '+(hit.kind==='room'?it.name:it.type)+' — drag to move')}
+ if(hit){select(hit);const it=getItem(hit),y=hit.kind==='room'?roomBase(it)+FLOOR:objBaseY(it),p=groundPt(e,y);drag={mode:'move',kind:hit.kind,id:hit.id,y,ox:p?p.x-it.x:0,oz:p?p.z-it.z:0,moved:false};toast('Selected '+(hit.kind==='room'?it.name:it.type)+' — drag to move')}
  else{if(e.button===0&&!e.shiftKey)select(null);drag={mode:(e.shiftKey||e.button===2||e.button===1)?'pan':'orbit',px:e.clientX,py:e.clientY}}});
 cv3.addEventListener('pointermove',e=>{if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
  if(playMode){if(document.pointerLockElement===cv3||(drag&&drag.mode==='look')){play.yaw-=(e.movementX||0)*.0025;play.pitch=clamp(play.pitch-(e.movementY||0)*.0025,-1.3,1.3)}return}
@@ -833,7 +872,7 @@ function renderInspector(){
  if(room)h+=`<label class="if full"><span>Name</span><input type="text" data-k="name" value="${esc(it.name)}" maxlength="40"></label>`;
  if(room||!CAT[it.type]?.out)h+=`<label class="if full"><span>Floor${room?' (moves its fixtures too)':''}</span><select data-k="level">${S.floors.map((_,i)=>`<option value="${i}"${i===lvl(it)?' selected':''}>${floorName(i)}</option>`).join('')}</select></label>`;
  h+=F('Width (m)','w',it.w,.1,room?1:.05,40)+F('Depth (m)','d',it.d,.1,room?1:.05,40);
- if(!room)h+=F('Height (m)','h',it.h,.1,.01,10);if(!room&&isOpening(it.type))h+=F('Sill height (m)','e',it.e||0,.05,0,6);
+ if(!room&&!CAT[it.type]?.stair)h+=F('Height (m)','h',it.h,.1,.01,10);if(!room&&isOpening(it.type))h+=F('Sill height (m)','e',it.e||0,.05,0,6);
  h+=F('Position X (m)','x',it.x,.25,-100,100)+F('Position Z (m)','z',it.z,.25,-100,100);
  if(!room)h+=F('Rotation (°)','rot',it.rot,15,0,359);
  if(room||it.type!=='Window')h+=`<label class="if full"><span>${room?'Floor colour':'Colour'}</span><input type="color" data-k="${room?'c':'color'}" value="${room?it.c:(it.color||CAT[it.type].c)}"></label>`;
@@ -1372,9 +1411,24 @@ function assessReadiness(rooms=S.rooms,objects=S.objects,roof=S.site.roof){
  // Doors and windows only belong to rooms on their own floor.
  const touches=(r,o)=>{if(lvl(r)!==lvl(o))return false;const dx=Math.abs(o.x-r.x),dz=Math.abs(o.z-r.z),horizontal=Math.abs(Math.sin((o.rot||0)*Math.PI/180))<.5;return horizontal?Math.abs(dz-r.d/2)<.22&&dx+o.w/2<=r.w/2+.15:Math.abs(dx-r.w/2)<.22&&dz+o.w/2<=r.d/2+.15};
  const graph=rooms.map(()=>new Set()),exitRooms=new Set();let exits=0;
- for(const o of objects.filter(o=>o.type==='Door'&&o.w>=.75)){const ids=rooms.map((r,i)=>touches(r,o)?i:-1).filter(i=>i>=0);if(ids.length===1){if(!lvl(o)){exits++;exitRooms.add(ids[0])}}else if(ids.length===2){graph[ids[0]].add(ids[1]);graph[ids[1]].add(ids[0]);}}
+ // Stairs and exits (screening only): an outside door on Floor 1 is an exit; an outside door on an
+ // upper floor counts only when an outside stair on that floor stands within 1.2 m of it.
+ const nF=Math.max(1,S.floors.length),waysDown=Array(nF).fill(0),wayKinds=Array.from({length:nF},()=>[]),stairIssues=[],usedOutside=new Set();
+ const outside=objects.filter(o=>stairKind(o)==='outside'),roomAt=(L,x,z)=>rooms.findIndex(r=>lvl(r)===L&&inRoom(r,x,z,.05));
+ for(const o of objects.filter(o=>o.type==='Door'&&o.w>=.75)){const ids=rooms.map((r,i)=>touches(r,o)?i:-1).filter(i=>i>=0);if(ids.length===1){if(!lvl(o)){exits++;exitRooms.add(ids[0])}else{const st=outside.find(q=>lvl(q)===lvl(o)&&distToItem(q,o.x,o.z)<=1.2);if(st){exitRooms.add(ids[0]);if(!usedOutside.has(st.id)){usedOutside.add(st.id);waysDown[lvl(o)]++;wayKinds[lvl(o)].push('outside stair')}}}}else if(ids.length===2){graph[ids[0]].add(ids[1]);graph[ids[1]].add(ids[0]);}}
+ for(const q of outside)if(!usedOutside.has(q.id))stairIssues.push(`Outside stair on ${floorName(lvl(q))} is not within 1.2 m of an outside door on that floor.`);
+ const lifts=objects.filter(o=>stairKind(o)==='lift').length;
+ for(const o of objects.filter(isStair)){const L=lvl(o),label=(o.type==='Fire exit stair'?'Fire exit stair':'Stair')+' on '+floorName(L),a=roomAt(L,o.x,o.z),b=L+1<nF?roomAt(L+1,o.x,o.z):-1;
+  if(L+1>=nF){stairIssues.push(label+' leads to no floor above.');continue}
+  if(b<0){stairIssues.push(label+' arrives outside any room on '+floorName(L+1)+'.');continue}
+  if(a<0&&L>0){stairIssues.push(label+' starts outside any room.');continue}
+  if(a<0)exitRooms.add(b);else{graph[a].add(b);graph[b].add(a)}
+  waysDown[L+1]++;wayKinds[L+1].push(o.type==='Fire exit stair'?'fire exit stair':'stair');
+  if(o.type==='Fire exit stair'){if(L>0&&!objects.some(q=>q.type==='Fire exit stair'&&lvl(q)===L-1&&Math.hypot(q.x-o.x,q.z-o.z)<=1))stairIssues.push(label+' has no fire exit stair below it at the same spot, so it does not continue to the ground.');
+   if(!L&&a>=0&&!exitRooms.has(a))stairIssues.push(label+' ends in '+rooms[a].name+', which has no outside door.')}}
+ const multi=S.site.kind==='Commercial'||S.site.kind==='Mixed use',shortFloors=[];for(let F=1;F<nF;F++)if(rooms.some(r=>lvl(r)===F)&&waysDown[F]<2)shortFloors.push(F);
  const reached=new Set(exitRooms),queue=[...reached];while(queue.length){const i=queue.shift();for(const j of graph[i])if(!reached.has(j)){reached.add(j);queue.push(j)}}
- const noWindow=rooms.filter(r=>!objects.some(o=>o.type==='Window'&&touches(r,o))).length,narrow=rooms.filter(r=>/hall/i.test(r.name)&&Math.min(r.w,r.d)<1.2).length,unreachable=rooms.filter((r,i)=>!lvl(r)&&!reached.has(i)).length,upper=rooms.filter(r=>lvl(r)>0).length;
+ const noWindow=rooms.filter(r=>!objects.some(o=>o.type==='Window'&&touches(r,o))).length,narrow=rooms.filter(r=>/hall/i.test(r.name)&&Math.min(r.w,r.d)<1.2).length,unreachable=rooms.filter((r,i)=>!reached.has(i)).length,upper=rooms.filter(r=>lvl(r)>0).length;
  const beds=rooms.filter(r=>/bed/i.test(r.name)&&roomBase(r)+FLOOR<=water).length;
  // The footprint check uses Floor 1, the part of the building that meets the ground.
  const ground=rooms.filter(r=>!lvl(r));
@@ -1385,14 +1439,16 @@ function assessReadiness(rooms=S.rooms,objects=S.objects,roof=S.site.roof){
  const hz=S.hazard?.results||{},floodClass=hz.flood?.level,landClass=hz.landslide?.level,surgeClass=hz.surge?.level;
  const terrainRisk=Math.min(100,(slope>25?55:slope>10?25:5)+(river<10?25:river<30?10:0)+(elevations.some(h=>h<water)?20:0));
  const structureRisk=Math.min(100,(S.site.wall>3.3?20:5)+(roof==='off'?25:roof==='gable'?15:5)+(irregular?25:0)+(large?20:0)+(clearance!==null&&clearance<.3?25:0));
- const planRisk=Math.min(100,(exits<2?25:0)+(unreachable?35:0)+(narrow?15:0)+Math.min(15,noWindow*5)+(beds?20:0));
+ // Two ways down per upper floor: required for Commercial and Mixed use, recommended for houses.
+ const stairRisk=Math.min(multi?30:15,shortFloors.length*(multi?15:5))+(stairIssues.length?10:0);
+ const planRisk=Math.min(100,(exits<2?25:0)+(unreachable?35:0)+(narrow?15:0)+Math.min(15,noWindow*5)+(beds?20:0)+stairRisk);
  const score=rooms.length?Math.max(0,Math.round(100-(terrainRisk+structureRisk+planRisk)/3)):0;
  const rating=n=>n>=60?'High':n>=30?'Medium':'Low';
  const flood=Math.max(clearance===null?50:clearance<0?80:clearance<.3?45:10,floodClass===3?80:floodClass===2?50:floodClass===1?25:0);
  const rows=[['Flood',rating(flood),clearance!==null&&clearance<.3?'Raise the floor at least '+(.3-clearance).toFixed(2)+' m for the selected water scenario and 0.3 m screening margin.':'Verify drainage, local flood datum and an evacuation route.'],['Landslide',rating(Math.max(terrainRisk,landClass===3?85:landClass===2?55:landClass===1?25:0)),'Obtain geotechnical slope review; move away from unstable slopes and river banks.'],['Storm surge',surgeClass==null?'Unknown':rating(surgeClass>=3?85:surgeClass===2?50:20),'Verify coastal evacuation and design elevation with local authorities.'],['Typhoon wind',rating(structureRisk),'Have an engineer design roof tie-downs, opening protection and the continuous load path.'],['Earthquake',rating(structureRisk+(irregular?15:0)),'Obtain PHIVOLCS fault/liquefaction screening and engineering review of walls and large openings.']];
- return {elevationRange:elevations.length?[Math.min(...elevations),Math.max(...elevations)]:null,score,rows,terrainRisk,structureRisk,planRisk,slope,river,clearance,exits,noWindow,narrow,unreachable,upper,beds,irregular,large,points:rooms.map((r,i)=>({name:(lvl(r)?floorName(lvl(r))+' · ':'')+r.name,route:lvl(r)?null:reached.has(i)})),hazardKnown:[floodClass,landClass,surgeClass].filter(v=>v!=null).length};
+ return {elevationRange:elevations.length?[Math.min(...elevations),Math.max(...elevations)]:null,score,rows,terrainRisk,structureRisk,planRisk,slope,river,clearance,exits,noWindow,narrow,unreachable,upper,beds,irregular,large,waysDown,wayKinds,shortFloors,stairIssues,lifts,multi,nF,points:rooms.map((r,i)=>({name:(lvl(r)?floorName(lvl(r))+' · ':'')+r.name,route:reached.has(i)})),hazardKnown:[floodClass,landClass,surgeClass].filter(v=>v!=null).length};
 }
-function renderReadiness(){const a=assessReadiness();$('readinessReport').innerHTML=`<b>Readiness ${a.score}/100 · ${a.hazardKnown}/3 hazard layers available</b><p>Flood and landslide ratings combine model assumptions and any available map class. Wind and earthquake ratings assess design features only; storm surge is unknown without a map. Higher scores mean fewer flagged features. These thresholds are illustrative, not code requirements.</p><p>Heuristic design score, not a probability or safety certification. Model terrain uses relative elevations; it is not a surveyed terrain model.</p><p>Area scores: terrain ${100-a.terrainRisk}; structure ${100-a.structureRisk}; floor plan ${100-a.planRisk} /100.</p><p>Terrain elevation ${a.elevationRange?a.elevationRange.map(v=>v.toFixed(2)).join('–')+' m':'no footprint'} · maximum sampled slope ${a.slope.toFixed(1)}° · river ${a.river<1e8?a.river.toFixed(1)+' m':'not drawn'} · floor clearance ${a.clearance===null?'no house':a.clearance.toFixed(2)+' m'} above selected water level.</p><p>${a.exits} modeled exits · ${a.narrow} hallways below 1.2 m · ${a.noWindow} rooms without modeled windows · ${a.beds} flood-exposed bedrooms · ${a.irregular?'irregular':'regular'} footprint · ${a.large?'large opening/garage':'no large opening detected'} · ${S.floors.length} storey${S.floors.length>1?'s':''} · wall ${S.site.wall} m · roof ${esc(S.site.roof)}.</p>${a.upper?`<p>${a.upper} room${a.upper>1?'s':''} on upper floors: routes between floors are not checked yet because stairs are not modeled. These rooms are left out of the exit check.</p>`:''}${a.rows.map(([h,r,f])=>`<p><b>${h}: ${r} risk</b><br>${esc(f)}</p>`).join('')}<p>${a.exits<2?'Add a second independent exterior exit. ':''}${a.unreachable?'Connect '+a.unreachable+' rooms to an exit with usable doors. ':''}${a.narrow?'Widen narrow hallways to at least the 1.2 m screening target. ':''}${a.noWindow?'Add suitable windows where missing. ':''}${a.beds?'Move flood-exposed bedrooms above the flood scenario.':''}</p><details><summary>Room-to-exit paths</summary>${a.points.map(p=>`<div>${esc(p.name)}: ${p.route===null?'not checked (upper floor; stairs not modeled yet)':p.route?'door graph reaches an exterior exit':'no modeled route'}</div>`).join('')}<p>Connectivity ignores furniture blockage, door swing, stairs and travel distance. Check routes physically.</p></details><p>NOAH lot badges: ${['flood','landslide','surge'].map(k=>k+': '+(S.hazard?.results?.[k]?.level==null?'Unavailable':S.hazard.results[k].level===0?'Low':S.hazard.results[k].level===1?'Low':S.hazard.results[k].level===2?'Medium':'High')).join(' · ')}. Project NOAH and contributors. Earthquake rating is design-only; PHIVOLCS data is not connected.</p><p>This is a screening tool and does not replace an engineer’s assessment. Missing maps never mean no hazard.</p>`;}
+function renderReadiness(){const a=assessReadiness();$('readinessReport').innerHTML=`<b>Readiness ${a.score}/100 · ${a.hazardKnown}/3 hazard layers available</b><p>Flood and landslide ratings combine model assumptions and any available map class. Wind and earthquake ratings assess design features only; storm surge is unknown without a map. Higher scores mean fewer flagged features. These thresholds are illustrative, not code requirements.</p><p>Heuristic design score, not a probability or safety certification. Model terrain uses relative elevations; it is not a surveyed terrain model.</p><p>Area scores: terrain ${100-a.terrainRisk}; structure ${100-a.structureRisk}; floor plan ${100-a.planRisk} /100.</p><p>Terrain elevation ${a.elevationRange?a.elevationRange.map(v=>v.toFixed(2)).join('–')+' m':'no footprint'} · maximum sampled slope ${a.slope.toFixed(1)}° · river ${a.river<1e8?a.river.toFixed(1)+' m':'not drawn'} · floor clearance ${a.clearance===null?'no house':a.clearance.toFixed(2)+' m'} above selected water level.</p><p>${a.exits} modeled exits · ${a.narrow} hallways below 1.2 m · ${a.noWindow} rooms without modeled windows · ${a.beds} flood-exposed bedrooms · ${a.irregular?'irregular':'regular'} footprint · ${a.large?'large opening/garage':'no large opening detected'} · ${S.floors.length} storey${S.floors.length>1?'s':''} · wall ${S.site.wall} m · roof ${esc(S.site.roof)}.</p>${a.nF>1?`<p><b>Floors and stairs</b><br>${Array.from({length:a.nF-1},(_,i)=>i+1).map(F=>`${floorName(F)}: ${a.waysDown[F]} way${a.waysDown[F]===1?'':'s'} down${a.wayKinds[F].length?' ('+a.wayKinds[F].join(', ')+')':''}`).join('<br>')}</p>${a.shortFloors.length?`<p>${a.multi?'Required':'Recommended'} for a ${esc(S.site.kind.toLowerCase())}: two separate ways down from every upper floor, such as the main stair plus a fire exit stair or an outside stair. Short on ${a.shortFloors.map(floorName).join(', ')}.</p>`:''}${a.stairIssues.map(t=>`<p>${esc(t)}</p>`).join('')}${a.lifts?'<p>Elevators are not counted as a way down in a fire.</p>':''}`:''}${a.rows.map(([h,r,f])=>`<p><b>${h}: ${r} risk</b><br>${esc(f)}</p>`).join('')}<p>${a.exits<2?'Add a second independent exterior exit. ':''}${a.unreachable?'Connect '+a.unreachable+' rooms to an exit with usable doors. ':''}${a.narrow?'Widen narrow hallways to at least the 1.2 m screening target. ':''}${a.noWindow?'Add suitable windows where missing. ':''}${a.beds?'Move flood-exposed bedrooms above the flood scenario. ':''}${a.shortFloors.length?'Add a second way down (fire exit stair or outside stair) on '+a.shortFloors.map(floorName).join(', ')+'. ':''}${a.stairIssues.length?'Fix the stair issues listed above.':''}</p><details><summary>Room-to-exit paths</summary>${a.points.map(p=>`<div>${esc(p.name)}: ${p.route?'doors and stairs reach an exterior exit':'no modeled route'}</div>`).join('')}<p>Connectivity ignores furniture blockage, door swing, stair width and travel distance. Stairs and exits are screening checks, not fire-code compliance. Check routes physically.</p></details><p>NOAH lot badges: ${['flood','landslide','surge'].map(k=>k+': '+(S.hazard?.results?.[k]?.level==null?'Unavailable':S.hazard.results[k].level===0?'Low':S.hazard.results[k].level===1?'Low':S.hazard.results[k].level===2?'Medium':'High')).join(' · ')}. Project NOAH and contributors. Earthquake rating is design-only; PHIVOLCS data is not connected.</p><p>This is a screening tool and does not replace an engineer’s assessment. Missing maps never mean no hazard.</p>`;}
 $('readinessBtn').onclick=renderReadiness;
 async function fetchHazard(){const request=++hazardRequest;const lat=Number($('siteLat').value),lng=Number($('siteLng').value);if(!$('siteLat').value||!$('siteLng').value||!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180)return toast('Enter valid latitude and longitude');const period=Number($('hazardPeriod').value),surge=Number($('surgeScenario').value);S.location={lat,lng,period,surge};S.hazard=null;$('hazardStatus').textContent='Checking cached layers…';try{const r=await fetch(`hazard.php?lat=${lat}&lng=${lng}&period=${period}&surge=${surge}`),h=await r.json();if(!r.ok)throw Error(h.error||'Hazard lookup failed');if(request!==hazardRequest)return;S.hazard=h;const f=h.results.flood;if(f?.level===0){S.env.flood=0;syncUI();rebuild()}if(f?.level>0){const depth=f.depth_m??({1:.5,2:1.5,3:1.6}[f.level]);S.env.flood=depth;$('hazardStatus').textContent=`Flood scenario set to ${depth} m. `+(f.level===3?'Level 3 exceeds 1.5 m; 1.6 m is a lower-bound visualization, not a predicted depth.':'Class upper bound used unless measured depth is supplied.');syncUI();rebuild()}else $('hazardStatus').textContent='Lookup complete. '+Object.entries(h.results).map(([k,v])=>k+': '+v.status).join(' · ');renderReadiness();commit()}catch(e){if(request!==hazardRequest)return;$('hazardStatus').textContent=e.message;renderReadiness();commit()}}
 $('fetchHazard').onclick=fetchHazard;

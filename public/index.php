@@ -200,11 +200,13 @@ canvas#plan2d{display:none;cursor:default}
 .lm-pin.onlot{opacity:.75}
 .lm-check{display:flex;gap:6px;align-items:flex-start;margin:8px 0;cursor:pointer}
 .lm-check input{margin:2px 0 0;flex:none}
+.sw{display:inline-block;width:10px;height:10px;border:1px solid #0003;border-radius:2px;vertical-align:-1px}
 #northArrow{position:absolute;right:14px;top:14px;width:46px;height:46px;border-radius:50%;background:#fffd;border:1px solid #0003;box-shadow:0 1px 4px #0004;z-index:4;pointer-events:none}
 #northArrow svg{width:100%;height:100%;display:block}
 #gmAttr{position:absolute;right:0;bottom:0;padding:1px 6px;font-size:10px;background:#fffd;color:#333;z-index:4}
 #gmAttr a{color:#245}
 .lm-tiles img.err{visibility:hidden}
+.lm-haz{position:absolute;inset:0;pointer-events:none}
 .lm-rings{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
 .lm-pin{position:absolute;width:22px;height:22px;margin:-26px 0 0 -11px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:var(--danger);border:2px solid #fff;box-shadow:0 2px 6px #0007;cursor:move;z-index:2}
 .lm-zoom{position:absolute;top:6px;right:6px;display:flex;flex-direction:column;gap:3px;z-index:3}
@@ -282,6 +284,7 @@ canvas#plan2d{display:none;cursor:default}
       <div id="locStatus" class="help" role="status">Use this when you are standing on the lot, or click the map to place the pin.</div>
       <div class="lotmap" id="lotMap" tabindex="0" role="application" aria-label="Lot map. Drag to move the map, click to place the lot pin, plus and minus keys to zoom.">
         <div class="lm-tiles" id="lmTiles"></div>
+        <canvas class="lm-haz" id="lmHaz" aria-hidden="true"></canvas>
         <svg class="lm-rings" id="lmRings" aria-hidden="true"></svg>
         <div class="lm-pin" id="lmPin" title="Drag onto your lot" hidden></div>
         <div class="lm-zoom"><button id="lmIn" type="button" aria-label="Zoom in">+</button><button id="lmOut" type="button" aria-label="Zoom out">−</button><button id="lmBig" type="button" aria-label="Larger map" title="Larger map">⤢</button></div>
@@ -291,6 +294,9 @@ canvas#plan2d{display:none;cursor:default}
       <div class="field"><label for="lotBearing">Lot direction <output id="lotBearingOut"></output></label><input type="range" id="lotBearing" min="0" max="359" step="1" value="0"></div>
       <div class="row lm-bar"><button id="lmFit" type="button">Zoom to lot</button></div>
       <label class="help lm-check"><input type="checkbox" id="mapGround" checked> Show the street map around the lot in the 2D plan and 3D model</label>
+      <div class="field"><label for="hazardOverlay">Hazard colours on the map</label><select id="hazardOverlay"><option value="off">Off</option><option value="flood">Flood</option><option value="landslide">Landslide</option><option value="surge">Storm surge</option></select></div>
+      <p class="help" id="hzLegend" hidden><span class="sw" style="background:#eab30890"></span> low&ensp;<span class="sw" style="background:#f9731690"></span> medium&ensp;<span class="sw" style="background:#dc262690"></span> high · NOAH hazard areas within about 600 m</p>
+      <div class="help" id="hzOverlayNote" role="status"></div>
       <p class="help" id="lotMapHelp">The blue outline is your lot and the green shapes are the house, drawn to scale at the pin. The short tick marks the top edge of the 2D plan. Turn the lot until it lines up with the street.</p>
       <div class="row"><div class="field"><label for="siteLat">Latitude</label><input id="siteLat" type="number" min="-90" max="90" step="any"></div><div class="field"><label for="siteLng">Longitude</label><input id="siteLng" type="number" min="-180" max="180" step="any"></div></div>
       <div class="field"><label for="hazardPeriod">Flood return period</label><select id="hazardPeriod"><option>5</option><option>25</option><option selected>100</option></select></div>
@@ -1647,7 +1653,7 @@ function renderReadiness(){const a=assessReadiness();$('readinessReport').innerH
 $('readinessBtn').onclick=renderReadiness;
 async function fetchHazard(){const request=++hazardRequest;const lat=Number($('siteLat').value),lng=Number($('siteLng').value);if(!$('siteLat').value||!$('siteLng').value||!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180)return toast('Enter valid latitude and longitude');const period=Number($('hazardPeriod').value),surge=Number($('surgeScenario').value);S.location={lat,lng,period,surge};S.hazard=null;$('hazardStatus').textContent='Checking cached layers…';try{const r=await fetch(`hazard.php?lat=${lat}&lng=${lng}&period=${period}&surge=${surge}`),h=await r.json();if(!r.ok)throw Error(h.error||'Hazard lookup failed');if(request!==hazardRequest)return;S.hazard=h;const f=h.results.flood;if(f?.level===0){S.env.flood=0;syncUI();rebuild()}if(f?.level>0){const depth=f.depth_m??({1:.5,2:1.5,3:1.6}[f.level]);S.env.flood=depth;$('hazardStatus').textContent=`Flood scenario set to ${depth} m. `+(f.level===3?'Level 3 exceeds 1.5 m; 1.6 m is a lower-bound visualization, not a predicted depth.':'Class upper bound used unless measured depth is supplied.');syncUI();rebuild()}else $('hazardStatus').textContent=hazardMessage(h);renderReadiness();commit()}catch(e){if(request!==hazardRequest)return;$('hazardStatus').textContent=e.message;renderReadiness();commit()}}
 $('fetchHazard').onclick=fetchHazard;
-for(const id of ['siteLat','siteLng','hazardPeriod','surgeScenario'])$(id).onchange=()=>{hazardRequest++;S.hazard=null;S.location=null;$('hazardStatus').textContent='Location or scenario changed; check again.';renderReadiness();commit()};
+for(const id of ['siteLat','siteLng','hazardPeriod','surgeScenario'])$(id).onchange=()=>{hazardRequest++;S.hazard=null;S.location=null;$('hazardStatus').textContent='Location or scenario changed; check again.';renderReadiness();commit();gmSchedule()};
 /* Lot map: OpenStreetMap tiles served and cached by tile.php, draggable lot pin, 100/250/500 m rings. */
 const LM={z:13,cx:0,cy:0,pin:null,acc:null,tiles:new Map(),W:0,H:0,drag:null,ready:false};
 const LM_DEFAULT=[6.9214,122.079];// Zamboanga City, where the first NOAH data set is loaded
@@ -1662,6 +1668,8 @@ function lmRender(){const box=$('lotMap'),W=box.clientWidth,H=box.clientHeight;i
  const tz=Math.min(LM.z,LM_TILEZ),ts=256*2**(LM.z-tz),tn=2**tz;
  for(let ty=Math.max(0,Math.floor(y0/ts));ty<=Math.min(tn-1,Math.floor((y0+H)/ts));ty++)for(let tx=Math.floor(x0/ts);tx<=Math.floor((x0+W)/ts);tx++){const wx=((tx%tn)+tn)%tn,key=tz+'/'+tx+'/'+ty;need.add(key);let im=LM.tiles.get(key);if(!im){im=new Image();im.alt='';im.decoding='async';im.onerror=()=>im.classList.add('err');im.src=`tile.php?z=${tz}&x=${wx}&y=${ty}`;LM.tiles.set(key,im);layer.appendChild(im)}im.style.left=Math.round(tx*ts-x0)+'px';im.style.top=Math.round(ty*ts-y0)+'px';im.style.width=im.style.height=(ts+(ts>256?1:0))+'px'}
  for(const[k,im]of LM.tiles)if(!need.has(k)){im.remove();LM.tiles.delete(k)}
+ const hc=$('lmHaz');if(hc.width!==W||hc.height!==H){hc.width=W;hc.height=H}const hx=hc.getContext('2d');hx.clearRect(0,0,W,H);
+ if(GM&&GM.over&&hazardOverlayKind()&&HZO.key&&HZO.painted===HZO.key){const sc=2**(LM.z-GM_Z);hx.drawImage(GM.over,GM.ox*sc-x0,GM.oy*sc-y0,GM_N*sc,GM_N*sc)}
  const pin=$('lmPin'),svg=$('lmRings');if(!LM.pin){pin.hidden=true;svg.innerHTML='';return}
  const[px,py]=lmProj(LM.pin[0],LM.pin[1],LM.z),sx=px-x0,sy=py-y0,mpp=lmMetersPerPx(LM.pin[0]);pin.hidden=false;pin.style.left=sx+'px';pin.style.top=sy+'px';const lot=lmLotSvg(sx,sy,mpp);pin.classList.toggle('onlot',!!lot);
  svg.innerHTML=lot+(LM.acc?`<circle cx="${sx}" cy="${sy}" r="${LM.acc/mpp}" fill="#4fd1c522" stroke="#2a9d93" stroke-width="1"/>`:'')+LM_RINGS.map(m=>`<circle cx="${sx}" cy="${sy}" r="${m/mpp}" fill="none" stroke="#c2410c" stroke-width="1.3" stroke-dasharray="5 4" opacity=".85"/><text x="${sx+m/mpp+3}" y="${sy-3}" font-size="10" font-family="IBM Plex Mono,monospace" fill="#7c2d12" stroke="#fff" stroke-width="3" paint-order="stroke">${m} m</text>`).join('')}
@@ -1691,7 +1699,8 @@ function lmInit(){const box=$('lotMap');const la=Number($('siteLat').value),lo=N
  box.addEventListener('keydown',e=>{const k=e.key,step=60;if(k==='+'||k==='=')lmZoom(1);else if(k==='-'||k==='_')lmZoom(-1);else if(k.startsWith('Arrow')){LM.cx+=k==='ArrowLeft'?-step:k==='ArrowRight'?step:0;LM.cy+=k==='ArrowUp'?-step:k==='ArrowDown'?step:0;lmRender()}else return;e.preventDefault()});
  $('lmIn').onclick=()=>lmZoom(1);$('lmOut').onclick=()=>lmZoom(-1);$('lmBig').onclick=()=>lmSetBig(!box.classList.contains('big'));$('lmFit').onclick=lmFitLot;
  $('lotBearing').addEventListener('input',e=>{S.site.bearing=Number(e.target.value);lmSyncBearing();lmRender();gmSync()});
- $('mapGround').addEventListener('change',e=>{S.site.mapGround=e.target.checked;gmSync();commit()});$('lotBearing').addEventListener('change',()=>commit());
+ $('mapGround').addEventListener('change',e=>{S.site.mapGround=e.target.checked;gmSync();commit()});
+ $('hazardOverlay').addEventListener('change',e=>{S.site.hazardOverlay=e.target.value;gmSync();commit()});$('lotBearing').addEventListener('change',()=>commit());
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('big'))lmSetBig(false)});lmSyncBearing();
  for(const id of['siteLat','siteLng'])$(id).addEventListener('input',()=>lmFromInputs(true));
  LM.ready=true;lmRender()}
@@ -1710,13 +1719,13 @@ function renderHazardRings(){const box=$('hazardRings'),h=S.hazard;if(!h?.result
  const notes=hazardLayers(h).map(([k,name])=>{const g=h.results[k]?.rings?.at(-1);return g&&g.max_level?`${esc(name)}: ${100-g.share.none}% of the area within ${g.radius_m} m is in a mapped hazard area (${g.share.low}% low, ${g.share.medium}% medium, ${g.share.high}% high).`:''}).filter(Boolean);
  box.innerHTML=`<table class="hz"><thead><tr><th scope="col">Highest level</th><th scope="col">Lot</th>${radii.map(r=>`<th scope="col">${r} m</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>${notes.map(t=>`<p class="help">${t}</p>`).join('')}<p class="help">None means NOAH maps no hazard there. It is not a guarantee of low risk. Earthquake data (PHIVOLCS) is not installed yet.</p>`}
 function hazardReportText(){const h=S.hazard;if(!h?.results||!Object.values(h.results).some(r=>Array.isArray(r.rings)))return '';return '<p><b>Lot and surroundings (Project NOAH)</b><br>'+hazardLayers(h).map(([k,name])=>{const r=h.results[k];if(!Array.isArray(r?.rings))return esc(name)+': '+(r?.status==='outside_area'?'outside the installed data area':'data not installed');return esc(name)+': lot '+HZ_NAMES[r.level||0].toLowerCase()+' · '+r.rings.map(g=>'within '+g.radius_m+' m '+(g.max_level?'up to '+HZ_NAMES[g.max_level].toLowerCase()+' ('+(100-g.share.none)+'% of area)':'none mapped')).join(' · ')}).join('<br>')+'</p><p class="help">Highest NOAH hazard level found at the lot pin and inside each circle, sampled every 20 m. No mapped hazard is not a guarantee of low risk. Concept screening only.</p>'}
-{const sync0=syncUI;syncUI=function(){sync0();if(LM.ready){if(LM.pin&&LM.forS===S&&!S.location&&$('siteLat').value===''){$('siteLat').value=LM.pin[0].toFixed(6);$('siteLng').value=LM.pin[1].toFixed(6)}lmFromInputs(true);lmSyncBearing();lmRender();$('mapGround').checked=S.site.mapGround!==false;gmSync()}renderHazardRings()}}
+{const sync0=syncUI;syncUI=function(){sync0();if(LM.ready){if(LM.pin&&LM.forS===S&&!S.location&&$('siteLat').value===''){$('siteLat').value=LM.pin[0].toFixed(6);$('siteLng').value=LM.pin[1].toFixed(6)}lmFromInputs(true);lmSyncBearing();lmRender();$('mapGround').checked=S.site.mapGround!==false;$('hazardOverlay').value=hazardOverlayKind()||'off';gmSync()}renderHazardRings()}}
 {const ready0=renderReadiness;renderReadiness=function(){ready0();$('readinessReport').insertAdjacentHTML('beforeend',hazardReportText());renderHazardRings();if(LM.ready&&!LM.drag)lmRender()}}
 /* Street map as the ground: one north-up picture of the area around the pin (OpenStreetMap tiles through tile.php),
    drawn under the 2D plan and laid around the lot in the 3D model, both turned by the lot direction. */
 var GM=null;
 const GM_Z=18,GM_N=1536;// zoom 18, 1536 px: about 900 m across at this latitude (49 tiles, cached by tile.php)
-function gmInit(){const c=document.createElement('canvas');c.width=c.height=GM_N;GM={canvas:c,ctx:c.getContext('2d'),key:'',mpp:1,ok:false,tex:null,mesh:null,timer:0,dirty:false};
+function gmInit(){const mk=()=>{const c=document.createElement('canvas');c.width=c.height=GM_N;return c};const c=mk(),ov=mk(),out=mk();GM={canvas:c,ctx:c.getContext('2d'),over:ov,overCtx:ov.getContext('2d'),out,outCtx:out.getContext('2d'),ox:0,oy:0,key:'',mpp:1,ok:false,tex:null,mesh:null,timer:0,dirty:false};
  const n=document.createElement('div');n.id='northArrow';n.title='North';n.hidden=true;n.innerHTML='<svg viewBox="0 0 46 46" aria-hidden="true"><g id="northNeedle"><path d="M23 6 30 26 23 22 16 26Z" fill="#b91c1c"/><path d="M23 40 16 26 23 30 30 26Z" fill="#94a3b8"/><text x="23" y="19.5" text-anchor="middle" font-size="8" font-weight="700" font-family="Inter,sans-serif" fill="#fff">N</text></g></svg>';wrap.appendChild(n);
  const a=document.createElement('div');a.id='gmAttr';a.hidden=true;a.innerHTML='© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';wrap.appendChild(a);
  setInterval(gmCompass,150)}
@@ -1727,19 +1736,44 @@ function gmArrays(bearing,sw,sd,side){const t=bearing*Math.PI/180,c=Math.cos(t),
  return{pos,uv,nor,idx:[0,4,5,0,5,1,1,5,6,1,6,2,2,6,7,2,7,3,3,7,4,3,4,0]}}
 function gmEdgeY(){const sw=S.site.width/2,sd=S.site.depth/2;let y=Infinity;for(let i=0;i<=40;i++){const u=-1+i/20;y=Math.min(y,baseH(u*sw,-sd),baseH(u*sw,sd),baseH(-sw,u*sd),baseH(sw,u*sd))}return y-.03}
 function gmLoad(){const[la,lo]=LM.pin,key=la.toFixed(5)+','+lo.toFixed(5);if(key===GM.key)return;GM.key=key;GM.mpp=156543.03392*Math.cos(la*Math.PI/180)/2**GM_Z;
- const x=GM.ctx;x.fillStyle='#dfe3dc';x.fillRect(0,0,GM_N,GM_N);const[cx,cy]=lmProj(la,lo,GM_Z),x0=cx-GM_N/2,y0=cy-GM_N/2,n=2**GM_Z;
+ const x=GM.ctx;x.fillStyle='#dfe3dc';x.fillRect(0,0,GM_N,GM_N);const[cx,cy]=lmProj(la,lo,GM_Z),x0=cx-GM_N/2,y0=cy-GM_N/2,n=2**GM_Z;GM.ox=x0;GM.oy=y0;
  for(let ty=Math.max(0,Math.floor(y0/256));ty<=Math.min(n-1,Math.floor((y0+GM_N)/256));ty++)for(let tx=Math.floor(x0/256);tx<=Math.floor((x0+GM_N)/256);tx++){const im=new Image();im.onload=()=>{if(GM.key!==key)return;x.drawImage(im,Math.round(tx*256-x0),Math.round(ty*256-y0));gmChanged()};im.src=`tile.php?z=${GM_Z}&x=${((tx%n)+n)%n}&y=${ty}`}}
-function gmChanged(){if(GM.dirty)return;GM.dirty=true;requestAnimationFrame(()=>{GM.dirty=false;if(GM.tex)GM.tex.needsUpdate=true;draw2D()})}
+function gmChanged(){if(GM.dirty)return;GM.dirty=true;requestAnimationFrame(()=>{GM.dirty=false;GM.outCtx.drawImage(GM.canvas,0,0);GM.outCtx.drawImage(GM.over,0,0);if(GM.tex)GM.tex.needsUpdate=true;draw2D();if(LM.ready&&!LM.drag)lmRender()})}
 function gmSchedule(){if(!GM)return;clearTimeout(GM.timer);GM.timer=setTimeout(gmSync,700)}
 function gmSync(){if(!GM)return;const on=S.site.mapGround!==false&&!!LM.pin;GM.ok=on;$('gmAttr').hidden=!on;
- if(on){gmLoad();try{gmMesh3D()}catch(e){console.warn('Map ground (3D):',e)}}else if(GM.mesh)GM.mesh.visible=false;
- gmCompass();draw2D()}
+ if(LM.pin&&(on||hazardOverlayKind()))gmLoad();
+ if(on){try{gmMesh3D()}catch(e){console.warn('Map ground (3D):',e)}}else if(GM.mesh)GM.mesh.visible=false;
+ gmCompass();gmOverlayLoad();draw2D()}
+/* Hazard colours on the ground map: the NOAH records within 600 m (hazard.php?cells=1), painted level by level. */
+const HZO={key:'',painted:'',data:null,req:0};
+function hzNoteText(label){const d=HZO.data;if(!d)return '';return d.status==='unavailable'?label+': data is not installed on this server.':d.status==='outside_area'?'The pin is outside the installed hazard data.':!d.features.length?label+': NOAH maps nothing within 600 m of the pin. That is not a guarantee of low risk.':label+' painted on the map. Unpainted land is not a guarantee of low risk.'+(GM.ok?'':' Turn on the street map above to colour the 2D plan and 3D model too.')}
+function hazardOverlayKind(){const v=S.site.hazardOverlay;return v==='flood'||v==='landslide'||v==='surge'?v:null}
+function gmOverlayPaint(){const x=GM.overCtx;x.clearRect(0,0,GM_N,GM_N);const d=HZO.data,k=hazardOverlayKind();
+ if(k&&d&&d.features&&d.features.length&&HZO.key){const colors={1:'#eab308',2:'#f97316',3:'#dc2626'},tmp=GM.tmp||(GM.tmp=document.createElement('canvas'));if(tmp.width!==GM_N)tmp.width=tmp.height=GM_N;const t=tmp.getContext('2d');
+  for(const lv of[1,2,3]){t.clearRect(0,0,GM_N,GM_N);t.fillStyle=colors[lv];let any=false;
+   for(const f of d.features){if(f.l!==lv)continue;any=true;t.beginPath();
+    for(const r of f.r){const c=r[4];for(let i=0;i<c.length;i+=2){const[wx,wy]=lmProj(c[i+1],c[i],GM_Z);i?t.lineTo(wx-GM.ox,wy-GM.oy):t.moveTo(wx-GM.ox,wy-GM.oy)}t.closePath()}
+    t.fill('evenodd')}
+   if(any){x.globalAlpha=.38;x.drawImage(tmp,0,0);x.globalAlpha=1}}}
+ HZO.painted=HZO.key;gmChanged()}
+async function gmOverlayLoad(){const k=hazardOverlayKind(),note=$('hzOverlayNote');$('hzLegend').hidden=!(k&&LM.pin);
+ if(!k||!LM.pin){note.textContent=!k?'':'Place the pin to see hazard colours.';HZO.key='';gmOverlayPaint();return}
+ const label=k==='flood'?'Flood · '+$('hazardPeriod').value+'-yr':k==='surge'?'Storm surge · '+$('surgeScenario').value:'Landslide';
+ const key=GM.key+'|'+k+'|'+$('hazardPeriod').value+'|'+$('surgeScenario').value;
+ if(HZO.key===key){if(HZO.painted!==key)gmOverlayPaint();note.textContent=hzNoteText(label);return}
+ const req=++HZO.req;note.textContent='Loading '+label+' areas\u2026';
+ try{const res=await fetch('hazard.php?cells=1&layer='+k+'&lat='+LM.pin[0]+'&lng='+LM.pin[1]+'&period='+$('hazardPeriod').value+'&surge='+$('surgeScenario').value);const d=await res.json().catch(()=>({}));
+  if(req!==HZO.req)return;if(!res.ok)throw Error(d.error||'lookup failed');
+  HZO.key=key;HZO.data=d;
+  note.textContent=hzNoteText(label);
+  gmOverlayPaint()}
+ catch(e){if(req===HZO.req){HZO.key='';note.textContent='Could not load hazard areas: '+e.message}}}
 function gmMesh3D(){if(!scene||!renderer)return;const a=gmArrays(lotBearing(),S.site.width,S.site.depth,GM_N*GM.mpp),g=new THREE.BufferGeometry();
  g.setAttribute('position',new THREE.BufferAttribute(a.pos,3));g.setAttribute('normal',new THREE.BufferAttribute(a.nor,3));g.setAttribute('uv',new THREE.BufferAttribute(a.uv,2));g.setIndex(a.idx);
- if(!GM.mesh){GM.tex=new THREE.CanvasTexture(GM.canvas);GM.tex.colorSpace=THREE.SRGBColorSpace;GM.tex.anisotropy=8;GM.mesh=new THREE.Mesh(g,new THREE.MeshStandardMaterial({map:GM.tex,roughness:1,metalness:0,side:THREE.DoubleSide,fog:false}));GM.mesh.receiveShadow=true;scene.add(GM.mesh)}
+ if(!GM.mesh){GM.tex=new THREE.CanvasTexture(GM.out);GM.tex.colorSpace=THREE.SRGBColorSpace;GM.tex.anisotropy=8;GM.mesh=new THREE.Mesh(g,new THREE.MeshStandardMaterial({map:GM.tex,roughness:1,metalness:0,side:THREE.DoubleSide,fog:false}));GM.mesh.receiveShadow=true;scene.add(GM.mesh)}
  else{GM.mesh.geometry.dispose();GM.mesh.geometry=g}
  GM.tex.needsUpdate=true;GM.mesh.position.y=gmEdgeY();GM.mesh.visible=true}
-function drawGroundMap2D(ctx){if(!GM||!GM.ok)return;const side=GM_N*GM.mpp*pv.s;ctx.save();ctx.translate(pv.ox,pv.oy);ctx.rotate(-lotBearing()*Math.PI/180);ctx.drawImage(GM.canvas,-side/2,-side/2,side,side);ctx.restore()}
+function drawGroundMap2D(ctx){if(!GM||!GM.ok)return;const side=GM_N*GM.mpp*pv.s;ctx.save();ctx.translate(pv.ox,pv.oy);ctx.rotate(-lotBearing()*Math.PI/180);ctx.drawImage(GM.out,-side/2,-side/2,side,side);ctx.restore()}
 /* North arrow: in the 2D plan north is the top of the plan turned back by the lot direction; in 3D it follows the camera. */
 function gmCompass(){const el=document.getElementById('northNeedle');if(!el)return;$('northArrow').hidden=!LM.pin||view==='2d';if(!LM.pin)return;const t=lotBearing()*Math.PI/180;let deg=-lotBearing();
  if(view!=='2d'&&camera){const e=camera.matrixWorld.elements,nx=-Math.sin(t),nz=-Math.cos(t);let fx=-e[8],fz=-e[10];if(Math.hypot(fx,fz)<.15){fx=e[4];fz=e[6]}const a=Math.atan2(nx*e[0]+nz*e[2],nx*fx+nz*fz)*180/Math.PI;if(Number.isFinite(a)&&Math.hypot(fx,fz)>1e-6)deg=a}

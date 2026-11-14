@@ -3,7 +3,7 @@
  * Hazard lookup for a lot and its surroundings, from locally stored Project NOAH data.
  * No remote API is called.
  *
- * GET lat, lng, period (5|25|100), surge (1|2|3|4)
+ * GET lat, lng, period (5|25|100), surge (1|2|3|4); add cells=1&layer=... for the map overlay polygons near the point.
  *
  * Data lives in hazard-data/ (or ARCHISPACE_HAZARD_DIR), one folder per layer:
  *   flood-5, flood-25, flood-100, landslide, surge-1 ... surge-4
@@ -130,6 +130,41 @@ function cellLookup(string $dir,float $lng,float $lat): array {
 }
 
 $root=getenv('ARCHISPACE_HAZARD_DIR') ?: dirname(__DIR__) . '/hazard-data';
+
+// ---- Hazard areas near the pin, for the map overlay (?cells=1&layer=flood|landslide|surge).
+// Returns the NOAH records whose rings touch a 600 m box around the point, as stored
+// (per ring: [minX,minY,maxX,maxY,[x1,y1,...]]; a point is inside a record when it is
+// inside an odd number of that record's rings). Cell layout only.
+if (isset($_GET['cells'])) {
+    $layers=['flood'=>'flood-'.$period,'landslide'=>'landslide','surge'=>'surge-'.$surge];
+    $layer=(string)($_GET['layer']??'flood');
+    if (!isset($layers[$layer])) badHazard('Invalid layer');
+    $dir=$root.'/'.$layers[$layer];
+    $out=['layer'=>$layer,'dataset'=>$layers[$layer],'radius_m'=>600,'levels'=>['1'=>'low','2'=>'medium','3'=>'high'],
+        'source'=>'Project NOAH and contributors','features'=>[]];
+    try {
+        if (!is_file($dir.'/index.json')) { $out['status']='unavailable'; echo json_encode($out,JSON_THROW_ON_ERROR); exit; }
+        $meta=json_decode(file_get_contents($dir.'/index.json'),true,8,JSON_THROW_ON_ERROR);
+        $cell=$meta['cell_deg']??null;
+        if (($meta['format']??'')!=='archispace-hazard-cells-1' || !is_numeric($cell) || $cell<=0) throw new RuntimeException('Unknown hazard data format');
+        $out['dataset']=(string)($meta['dataset']??$out['dataset']);
+        $bb=$meta['clip_bbox']??null;
+        if (is_array($bb) && count($bb)===4 && ($lng<$bb[0] || $lat<$bb[1] || $lng>$bb[2] || $lat>$bb[3])) { $out['status']='outside_area'; echo json_encode($out,JSON_THROW_ON_ERROR); exit; }
+        $dLat=600/111320.0; $dLng=600/(111320.0*max(.2,cos(deg2rad($lat))));
+        $qx0=$lng-$dLng; $qy0=$lat-$dLat; $qx1=$lng+$dLng; $qy1=$lat+$dLat; $cf=(float)$cell;
+        for ($ix=(int)floor($qx0/$cf); $ix<=(int)floor($qx1/$cf); $ix++) for ($iy=(int)floor($qy0/$cf); $iy<=(int)floor($qy1/$cf); $iy++) {
+            foreach (loadCell($dir,$ix,$iy) as [$level,$rings]) {
+                $keep=[];
+                foreach ($rings as $r) if ($r[0]<=$qx1 && $r[2]>=$qx0 && $r[1]<=$qy1 && $r[3]>=$qy0) $keep[]=$r;
+                if ($keep) $out['features'][]=['l'=>$level,'r'=>$keep];
+            }
+        }
+        $out['status']='ok';
+        echo json_encode($out,JSON_THROW_ON_ERROR);
+    } catch (Throwable $e) { http_response_code(503); echo json_encode(['error'=>'Hazard data is invalid or unreadable; ask the administrator to rebuild it with tools/noah_to_cells.py.']); }
+    exit;
+}
+
 $results=[]; $found=0;
 try {
     foreach (['flood'=>'flood-'.$period,'landslide'=>'landslide','surge'=>'surge-'.$surge] as $kind=>$file) {

@@ -188,6 +188,21 @@ canvas#plan2d{display:none;cursor:default}
  #projName{width:120px}.brand small,.hide-s{display:none}
  .toolbar{gap:6px}.seg button{padding:5px 8px}
 }
+.lm-bar{align-items:center;margin-bottom:6px}
+.lm-link{font-size:11.5px;color:var(--accent2)}
+.lotmap{position:relative;height:230px;margin:8px 0 6px;border:1px solid var(--line2);border-radius:var(--r);overflow:hidden;background:#dfe3dc;cursor:grab;touch-action:none;user-select:none}
+.lotmap.dragging{cursor:grabbing}
+.lotmap:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.lm-tiles{position:absolute;inset:0}
+.lm-tiles img{position:absolute;width:256px;height:256px;max-width:none;pointer-events:none}
+.lm-tiles img.err{visibility:hidden}
+.lm-rings{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.lm-pin{position:absolute;width:22px;height:22px;margin:-26px 0 0 -11px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:var(--danger);border:2px solid #fff;box-shadow:0 2px 6px #0007;cursor:move;z-index:2}
+.lm-zoom{position:absolute;top:6px;right:6px;display:flex;flex-direction:column;gap:3px;z-index:3}
+.lm-zoom button{width:26px;height:26px;padding:0;text-align:center;font-size:15px;line-height:1;background:#fffe;color:#1b2430;border-color:#0003}
+.lm-attr{position:absolute;right:0;bottom:0;padding:1px 5px;font-size:9.5px;background:#fffd;color:#333;z-index:3}
+.lm-attr a{color:#245}
+.help.warn{color:var(--accent)}
 </style>
 <link rel="stylesheet" href="assets/studio.css"><script src="assets/studio-ui.js" defer></script>
 </head>
@@ -245,6 +260,16 @@ canvas#plan2d{display:none;cursor:default}
       <p class="help" style="margin-top:8px">Upload house or lot blueprints to overlay on the floor plan. Adjust opacity and scale to trace your design.</p>
     </div>
     <div class="sect"><div class="stitle">Hazard Data · Location</div>
+      <div class="row lm-bar"><button id="useLocation" type="button">Use my location</button><a id="openInMap" class="lm-link" target="_blank" rel="noopener" hidden>Open in map</a></div>
+      <div id="locStatus" class="help" role="status">Use this when you are standing on the lot, or click the map to place the pin.</div>
+      <div class="lotmap" id="lotMap" tabindex="0" role="application" aria-label="Lot map. Drag to move the map, click to place the lot pin, plus and minus keys to zoom.">
+        <div class="lm-tiles" id="lmTiles"></div>
+        <svg class="lm-rings" id="lmRings" aria-hidden="true"></svg>
+        <div class="lm-pin" id="lmPin" title="Drag onto your lot" hidden></div>
+        <div class="lm-zoom"><button id="lmIn" type="button" aria-label="Zoom in">+</button><button id="lmOut" type="button" aria-label="Zoom out">−</button></div>
+        <div class="lm-attr">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors</div>
+      </div>
+      <p class="help">Click the map or drag the pin onto your lot. Rings show 100 m, 250 m and 500 m around the pin.</p>
       <div class="row"><div class="field"><label for="siteLat">Latitude</label><input id="siteLat" type="number" min="-90" max="90" step="any"></div><div class="field"><label for="siteLng">Longitude</label><input id="siteLng" type="number" min="-180" max="180" step="any"></div></div>
       <div class="field"><label for="hazardPeriod">Flood return period</label><select id="hazardPeriod"><option>5</option><option>25</option><option selected>100</option></select></div>
       <div class="field"><label for="surgeScenario">Storm surge scenario</label><select id="surgeScenario"><option>1</option><option>2</option><option>3</option><option selected>4</option></select></div>
@@ -1601,6 +1626,44 @@ $('readinessBtn').onclick=renderReadiness;
 async function fetchHazard(){const request=++hazardRequest;const lat=Number($('siteLat').value),lng=Number($('siteLng').value);if(!$('siteLat').value||!$('siteLng').value||!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180)return toast('Enter valid latitude and longitude');const period=Number($('hazardPeriod').value),surge=Number($('surgeScenario').value);S.location={lat,lng,period,surge};S.hazard=null;$('hazardStatus').textContent='Checking cached layers…';try{const r=await fetch(`hazard.php?lat=${lat}&lng=${lng}&period=${period}&surge=${surge}`),h=await r.json();if(!r.ok)throw Error(h.error||'Hazard lookup failed');if(request!==hazardRequest)return;S.hazard=h;const f=h.results.flood;if(f?.level===0){S.env.flood=0;syncUI();rebuild()}if(f?.level>0){const depth=f.depth_m??({1:.5,2:1.5,3:1.6}[f.level]);S.env.flood=depth;$('hazardStatus').textContent=`Flood scenario set to ${depth} m. `+(f.level===3?'Level 3 exceeds 1.5 m; 1.6 m is a lower-bound visualization, not a predicted depth.':'Class upper bound used unless measured depth is supplied.');syncUI();rebuild()}else $('hazardStatus').textContent='Lookup complete. '+Object.entries(h.results).map(([k,v])=>k+': '+v.status).join(' · ');renderReadiness();commit()}catch(e){if(request!==hazardRequest)return;$('hazardStatus').textContent=e.message;renderReadiness();commit()}}
 $('fetchHazard').onclick=fetchHazard;
 for(const id of ['siteLat','siteLng','hazardPeriod','surgeScenario'])$(id).onchange=()=>{hazardRequest++;S.hazard=null;S.location=null;$('hazardStatus').textContent='Location or scenario changed; check again.';renderReadiness();commit()};
+/* Lot map: OpenStreetMap tiles served and cached by tile.php, draggable lot pin, 100/250/500 m rings. */
+const LM={z:13,cx:0,cy:0,pin:null,acc:null,tiles:new Map(),W:0,H:0,drag:null,ready:false};
+const LM_DEFAULT=[6.9214,122.079];// Zamboanga City, where the first NOAH data set is loaded
+const LM_RINGS=[100,250,500];
+function lmProj(lat,lng,z){lat=Math.max(-85.05,Math.min(85.05,lat));const s=256*2**z,t=Math.sin(lat*Math.PI/180);return[(lng+180)/360*s,(.5-Math.log((1+t)/(1-t))/(4*Math.PI))*s]}
+function lmUnproj(x,y,z){const s=256*2**z,n=Math.PI-2*Math.PI*y/s;return[180/Math.PI*Math.atan(Math.sinh(n)),(((x/s*360)%360)+360)%360-180]}
+function lmCenter(lat,lng){[LM.cx,LM.cy]=lmProj(lat,lng,LM.z)}
+function lmZoom(dz,px,py){const nz=Math.max(3,Math.min(19,LM.z+dz));if(nz===LM.z)return;px??=LM.W/2;py??=LM.H/2;const wx=LM.cx-LM.W/2+px,wy=LM.cy-LM.H/2+py,[la,lo]=lmUnproj(wx,wy,LM.z);LM.z=nz;const[nx,ny]=lmProj(la,lo,nz);LM.cx=nx-px+LM.W/2;LM.cy=ny-py+LM.H/2;lmRender()}
+function lmMetersPerPx(lat){return 156543.03392*Math.cos(lat*Math.PI/180)/2**LM.z}
+function lmRender(){const box=$('lotMap'),W=box.clientWidth,H=box.clientHeight;if(!W||!H)return;LM.W=W;LM.H=H;const n=2**LM.z,x0=LM.cx-W/2,y0=LM.cy-H/2,need=new Set(),layer=$('lmTiles');
+ for(let ty=Math.max(0,Math.floor(y0/256));ty<=Math.min(n-1,Math.floor((y0+H)/256));ty++)for(let tx=Math.floor(x0/256);tx<=Math.floor((x0+W)/256);tx++){const wx=((tx%n)+n)%n,key=LM.z+'/'+tx+'/'+ty;need.add(key);let im=LM.tiles.get(key);if(!im){im=new Image();im.alt='';im.decoding='async';im.onerror=()=>im.classList.add('err');im.src=`tile.php?z=${LM.z}&x=${wx}&y=${ty}`;LM.tiles.set(key,im);layer.appendChild(im)}im.style.left=Math.round(tx*256-x0)+'px';im.style.top=Math.round(ty*256-y0)+'px'}
+ for(const[k,im]of LM.tiles)if(!need.has(k)){im.remove();LM.tiles.delete(k)}
+ const pin=$('lmPin'),svg=$('lmRings');if(!LM.pin){pin.hidden=true;svg.innerHTML='';return}
+ const[px,py]=lmProj(LM.pin[0],LM.pin[1],LM.z),sx=px-x0,sy=py-y0,mpp=lmMetersPerPx(LM.pin[0]);pin.hidden=false;pin.style.left=sx+'px';pin.style.top=sy+'px';
+ svg.innerHTML=(LM.acc?`<circle cx="${sx}" cy="${sy}" r="${LM.acc/mpp}" fill="#4fd1c522" stroke="#2a9d93" stroke-width="1"/>`:'')+LM_RINGS.map(m=>`<circle cx="${sx}" cy="${sy}" r="${m/mpp}" fill="none" stroke="#c2410c" stroke-width="1.3" stroke-dasharray="5 4" opacity=".85"/><text x="${sx+m/mpp+3}" y="${sy-3}" font-size="10" font-family="IBM Plex Mono,monospace" fill="#7c2d12" stroke="#fff" stroke-width="3" paint-order="stroke">${m} m</text>`).join('')}
+function lmStatus(t,warn=false){const e=$('locStatus');e.textContent=t;e.classList.toggle('warn',warn)}
+function lmLink(){const a=$('openInMap');if(!LM.pin){a.hidden=true;return}const[la,lo]=LM.pin.map(v=>v.toFixed(6));a.href=`https://www.openstreetmap.org/?mlat=${la}&mlon=${lo}#map=18/${la}/${lo}`;a.hidden=false}
+function lmSetPin(lat,lng,{acc=null,center=false,fromInputs=false}={}){LM.pin=[lat,lng];LM.acc=acc;if(center)lmCenter(lat,lng);lmLink();if(!fromInputs){$('siteLat').value=lat.toFixed(6);$('siteLng').value=lng.toFixed(6);$('siteLat').dispatchEvent(new Event('change'))}lmRender()}
+function lmFromInputs(center=true){const la=Number($('siteLat').value),lo=Number($('siteLng').value);if($('siteLat').value!==''&&$('siteLng').value!==''&&Number.isFinite(la)&&Number.isFinite(lo)&&Math.abs(la)<=85&&Math.abs(lo)<=180){if(!LM.pin||LM.pin[0]!==la||LM.pin[1]!==lo)lmSetPin(la,lo,{center,fromInputs:true})}else{LM.pin=null;LM.acc=null;lmLink();lmRender()}}
+function lmInit(){const box=$('lotMap');const la=Number($('siteLat').value),lo=Number($('siteLng').value);if($('siteLat').value!==''&&$('siteLng').value!==''&&Number.isFinite(la)&&Number.isFinite(lo)){LM.z=17;lmCenter(la,lo);lmFromInputs(false)}else lmCenter(...LM_DEFAULT);
+ new ResizeObserver(()=>lmRender()).observe(box);
+ const local=e=>{const r=box.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top]};
+ box.addEventListener('pointerdown',e=>{if(e.button!==0||e.target.closest('.lm-zoom,.lm-attr'))return;const[x,y]=local(e);LM.drag={pin:e.target===$('lmPin'),sx:x,sy:y,cx:LM.cx,cy:LM.cy,moved:false};try{box.setPointerCapture(e.pointerId)}catch(_){}box.classList.add('dragging')});
+ box.addEventListener('pointermove',e=>{const d=LM.drag;if(!d)return;const[x,y]=local(e);if(Math.hypot(x-d.sx,y-d.sy)>3)d.moved=true;if(!d.moved)return;if(d.pin){const[la,lo]=lmUnproj(LM.cx-LM.W/2+x,LM.cy-LM.H/2+y,LM.z);LM.pin=[la,lo];LM.acc=null;lmRender()}else{LM.cx=d.cx-(x-d.sx);LM.cy=d.cy-(y-d.sy);lmRender()}});
+ const end=e=>{const d=LM.drag;if(!d)return;LM.drag=null;box.classList.remove('dragging');const[x,y]=local(e);if(d.pin&&d.moved){lmSetPin(...LM.pin);lmStatus('Pin moved. Click Check location to update the hazard results.')}else if(!d.moved&&!d.pin){const[la,lo]=lmUnproj(LM.cx-LM.W/2+x,LM.cy-LM.H/2+y,LM.z);lmSetPin(la,lo);lmStatus('Pin placed. Drag it to adjust, then click Check location.')}};
+ box.addEventListener('pointerup',end);box.addEventListener('pointercancel',()=>{LM.drag=null;box.classList.remove('dragging');lmRender()});
+ box.addEventListener('wheel',e=>{e.preventDefault();const[x,y]=local(e);lmZoom(e.deltaY<0?1:-1,x,y)},{passive:false});
+ box.addEventListener('keydown',e=>{const k=e.key,step=60;if(k==='+'||k==='=')lmZoom(1);else if(k==='-'||k==='_')lmZoom(-1);else if(k.startsWith('Arrow')){LM.cx+=k==='ArrowLeft'?-step:k==='ArrowRight'?step:0;LM.cy+=k==='ArrowUp'?-step:k==='ArrowDown'?step:0;lmRender()}else return;e.preventDefault()});
+ $('lmIn').onclick=()=>lmZoom(1);$('lmOut').onclick=()=>lmZoom(-1);
+ for(const id of['siteLat','siteLng'])$(id).addEventListener('input',()=>lmFromInputs(true));
+ LM.ready=true;lmRender()}
+$('useLocation').onclick=()=>{if(!navigator.geolocation)return lmStatus('This browser cannot share its location. Click the map to place the pin.',true);if(!window.isSecureContext)return lmStatus('Location only works on a secure (HTTPS) page. Click the map to place the pin instead.',true);
+ lmStatus('Asking for your location…');$('useLocation').disabled=true;
+ navigator.geolocation.getCurrentPosition(p=>{$('useLocation').disabled=false;const{latitude:la,longitude:lo,accuracy:a}=p.coords;LM.z=Math.max(LM.z,a>200?15:17);lmSetPin(la,lo,{acc:a,center:true});const m=Math.round(a);lmStatus(a>50?`Located within about ±${m} m (the shaded circle). That is less precise than a lot, so drag the pin onto your lot, then click Check location.`:`Located within about ±${m} m. Drag the pin if it is not on your lot, then click Check location.`,a>50)},
+  e=>{$('useLocation').disabled=false;lmStatus(e.code===1?'Location permission was denied. Click the map to place the pin instead.':e.code===3?'Finding your location took too long. Try again, or click the map.':'Your location is not available right now. Click the map to place the pin.',true)},
+  {enableHighAccuracy:true,timeout:15000,maximumAge:0})};
+{const sync0=syncUI;syncUI=function(){sync0();if(LM.ready)lmFromInputs(true)}}
+lmInit();
 // Settings and layout changes refresh the report, without rebuilding the scene.
 document.addEventListener('change',()=>renderReadiness());
 

@@ -198,6 +198,12 @@ canvas#plan2d{display:none;cursor:default}
 .lotmap.big{position:fixed;left:272px;top:174px;right:12px;bottom:12px;height:auto;margin:0;z-index:60;box-shadow:0 10px 40px #0008}
 @media(max-width:800px){.lotmap.big{left:10px;top:70px;right:10px;bottom:10px}}
 .lm-pin.onlot{opacity:.75}
+.lm-check{display:flex;gap:6px;align-items:flex-start;margin:8px 0;cursor:pointer}
+.lm-check input{margin:2px 0 0;flex:none}
+#northArrow{position:absolute;right:14px;top:14px;width:46px;height:46px;border-radius:50%;background:#fffd;border:1px solid #0003;box-shadow:0 1px 4px #0004;z-index:4;pointer-events:none}
+#northArrow svg{width:100%;height:100%;display:block}
+#gmAttr{position:absolute;right:0;bottom:0;padding:1px 6px;font-size:10px;background:#fffd;color:#333;z-index:4}
+#gmAttr a{color:#245}
 .lm-tiles img.err{visibility:hidden}
 .lm-rings{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
 .lm-pin{position:absolute;width:22px;height:22px;margin:-26px 0 0 -11px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:var(--danger);border:2px solid #fff;box-shadow:0 2px 6px #0007;cursor:move;z-index:2}
@@ -284,6 +290,7 @@ canvas#plan2d{display:none;cursor:default}
       <p class="help">Click the map or drag the pin onto the middle of your lot. Rings show 100 m, 250 m and 500 m around the pin.</p>
       <div class="field"><label for="lotBearing">Lot direction <output id="lotBearingOut"></output></label><input type="range" id="lotBearing" min="0" max="359" step="1" value="0"></div>
       <div class="row lm-bar"><button id="lmFit" type="button">Zoom to lot</button></div>
+      <label class="help lm-check"><input type="checkbox" id="mapGround" checked> Show the street map around the lot in the 2D plan and 3D model</label>
       <p class="help" id="lotMapHelp">The blue outline is your lot and the green shapes are the house, drawn to scale at the pin. The short tick marks the top edge of the 2D plan. Turn the lot until it lines up with the street.</p>
       <div class="row"><div class="field"><label for="siteLat">Latitude</label><input id="siteLat" type="number" min="-90" max="90" step="any"></div><div class="field"><label for="siteLng">Longitude</label><input id="siteLng" type="number" min="-180" max="180" step="any"></div></div>
       <div class="field"><label for="hazardPeriod">Flood return period</label><select id="hazardPeriod"><option>5</option><option>25</option><option selected>100</option></select></div>
@@ -831,7 +838,7 @@ function drawIcon(cv,kind,name){const x=cv.getContext('2d'),S0=44,dpr=2;cv.width
  const c=CAT[name];let w=c.w,d=c.d;if(isOpening(name)){x.translate(0,-8);const k=30/w;w*=k;sym(x,name,w,4,c.c,2);return}const k=34/Math.max(w,d,.1);sym(x,name,Math.max(6,w*k),Math.max(6,d*k),c.c,1.4)}
 function draw2D(){
  if(view!=='2d')return;const W=wrap.clientWidth,H=wrap.clientHeight,dpr=Math.min(devicePixelRatio||1,2);if(plan.width!==Math.round(W*dpr)||plan.height!==Math.round(H*dpr)){plan.width=Math.round(W*dpr);plan.height=Math.round(H*dpr)}
- const ctx=pctx;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#f0f2e9';ctx.fillRect(0,0,W,H);
+ const ctx=pctx;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#f0f2e9';ctx.fillRect(0,0,W,H);drawGroundMap2D(ctx);
  const s=pv.s,sw=S.site.width,sd=S.site.depth,x0=pv.ox-sw*s/2,y0=pv.oy-sd*s/2;
  if(!planCache)buildPlanCache();ctx.imageSmoothingEnabled=true;ctx.drawImage(planCache,x0,y0,sw*s,sd*s);
  drawBlueprintOverlays(ctx,s);drawLotBoundary(ctx,s);drawGhostPlan(ctx,s);
@@ -857,7 +864,7 @@ function draw2D(){
   else{ctx.save();ctx.translate(pv.ox+it.x*s,pv.oy+it.z*s);ctx.rotate(-(it.rot||0)*Math.PI/180);const w=it.w*s,d=Math.max(it.d*s,10);ctx.strokeRect(-w/2-4,-d/2-4,w+8,d+8);ctx.restore();ctx.setLineDash([]);ctx.fillStyle='#3d6652';ctx.font='500 11px "JetBrains Mono",monospace';ctx.textAlign='left';ctx.fillText(it.type+' '+it.w.toFixed(2)+'×'+it.d.toFixed(2),pv.ox+it.x*s+Math.max(it.w,it.d)*s/2+8,pv.oy+it.z*s-6)}ctx.setLineDash([])}
  if(drag&&drag.mode==='river'&&drag.pts.length>1){ctx.strokeStyle='#3da5e8';ctx.globalAlpha=.8;ctx.lineWidth=Math.max(3,S.river.width*s);ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();drag.pts.forEach((p,i)=>{const px=pv.ox+p.x*s,py=pv.oy+p.z*s;i?ctx.lineTo(px,py):ctx.moveTo(px,py)});ctx.stroke();ctx.globalAlpha=1;ctx.lineCap='butt'}
  // compass
- const cx=W-48,cy=56;ctx.fillStyle='#fafbf8e6';ctx.beginPath();ctx.arc(cx,cy,28,0,7);ctx.fill();ctx.strokeStyle='#dde2d9';ctx.lineWidth=1;ctx.stroke();ctx.fillStyle='#3d6652';ctx.beginPath();ctx.moveTo(cx,cy-20);ctx.lineTo(cx+7,cy+8);ctx.lineTo(cx,cy+3);ctx.lineTo(cx-7,cy+8);ctx.closePath();ctx.fill();ctx.fillStyle='#24372f';ctx.font='700 11px Inter,sans-serif';ctx.textAlign='center';ctx.fillText('N',cx,cy+22);
+ const cx=W-48,cy=56;ctx.fillStyle='#fafbf8e6';ctx.beginPath();ctx.arc(cx,cy,28,0,7);ctx.fill();ctx.strokeStyle='#dde2d9';ctx.lineWidth=1;ctx.stroke();ctx.save();ctx.translate(cx,cy-4);ctx.rotate(-lotBearing()*Math.PI/180);ctx.fillStyle='#3d6652';ctx.beginPath();ctx.moveTo(0,-16);ctx.lineTo(7,12);ctx.lineTo(0,7);ctx.lineTo(-7,12);ctx.closePath();ctx.fill();ctx.restore();ctx.fillStyle='#24372f';ctx.font='700 11px Inter,sans-serif';ctx.textAlign='center';ctx.fillText('N',cx,cy+22);
  // scale bar
  let L=1;for(const v of[1,2,5,10,20])if((L=v)*s>=80)break;const bx=W-30-L*s,by=H-26;ctx.fillStyle='#24372f';ctx.fillRect(bx,by,L*s,3);ctx.fillRect(bx,by-4,1.5,11);ctx.fillRect(bx+L*s-1.5,by-4,1.5,11);ctx.font='500 11px "JetBrains Mono",monospace';ctx.textAlign='center';ctx.fillText(L+' m',bx+L*s/2,by-8);
  plan.style.cursor=riverMode?'crosshair':'default'}
@@ -1670,8 +1677,8 @@ function lmFitLot(){if(!LM.pin)return lmStatus('Place the pin on your lot first.
 function lmSyncBearing(){const b=lotBearing();$('lotBearing').value=b;$('lotBearingOut').textContent=b+'°'+(b%90?'':' · plan top faces '+['north','east','south','west'][b/90])}
 function lmSetBig(on){const box=$('lotMap');if(on===box.classList.contains('big'))return;if(on){LM.home=document.createComment('lot map');box.replaceWith(LM.home);document.body.appendChild(box)}else{LM.home.replaceWith(box);LM.home=null}box.classList.toggle('big',on);$('lmBig').textContent=on?'×':'⤢';$('lmBig').title=on?'Close larger map':'Larger map';$('lmBig').setAttribute('aria-label',$('lmBig').title);lmRender();if(on)box.focus()}
 function lmStatus(t,warn=false){const e=$('locStatus');e.textContent=t;e.classList.toggle('warn',warn)}
-function lmLink(){const a=$('openInMap');if(!LM.pin){a.hidden=true;return}const[la,lo]=LM.pin.map(v=>v.toFixed(6));a.href=`https://www.openstreetmap.org/?mlat=${la}&mlon=${lo}#map=18/${la}/${lo}`;a.hidden=false}
-function lmSetPin(lat,lng,{acc=null,center=false,fromInputs=false}={}){LM.pin=[lat,lng];LM.acc=acc;if(center)lmCenter(lat,lng);lmLink();if(!fromInputs){$('siteLat').value=lat.toFixed(6);$('siteLng').value=lng.toFixed(6);$('siteLat').dispatchEvent(new Event('change'))}lmRender()}
+function lmLink(){gmSchedule();const a=$('openInMap');if(!LM.pin){a.hidden=true;return}const[la,lo]=LM.pin.map(v=>v.toFixed(6));a.href=`https://www.openstreetmap.org/?mlat=${la}&mlon=${lo}#map=18/${la}/${lo}`;a.hidden=false}
+function lmSetPin(lat,lng,{acc=null,center=false,fromInputs=false}={}){lat=+lat.toFixed(6);lng=+lng.toFixed(6);LM.pin=[lat,lng];LM.forS=S;LM.acc=acc;if(center)lmCenter(lat,lng);lmLink();if(!fromInputs){$('siteLat').value=lat.toFixed(6);$('siteLng').value=lng.toFixed(6);$('siteLat').dispatchEvent(new Event('change'))}lmRender()}
 function lmFromInputs(center=true){const la=Number($('siteLat').value),lo=Number($('siteLng').value);if($('siteLat').value!==''&&$('siteLng').value!==''&&Number.isFinite(la)&&Number.isFinite(lo)&&Math.abs(la)<=85&&Math.abs(lo)<=180){if(!LM.pin||LM.pin[0]!==la||LM.pin[1]!==lo)lmSetPin(la,lo,{center,fromInputs:true})}else{LM.pin=null;LM.acc=null;lmLink();lmRender()}}
 function lmInit(){const box=$('lotMap');const la=Number($('siteLat').value),lo=Number($('siteLng').value);if($('siteLat').value!==''&&$('siteLng').value!==''&&Number.isFinite(la)&&Number.isFinite(lo)){LM.z=17;lmCenter(la,lo);lmFromInputs(false)}else lmCenter(...LM_DEFAULT);
  new ResizeObserver(()=>lmRender()).observe(box);
@@ -1683,7 +1690,8 @@ function lmInit(){const box=$('lotMap');const la=Number($('siteLat').value),lo=N
  box.addEventListener('wheel',e=>{e.preventDefault();const[x,y]=local(e);lmZoom(e.deltaY<0?1:-1,x,y)},{passive:false});
  box.addEventListener('keydown',e=>{const k=e.key,step=60;if(k==='+'||k==='=')lmZoom(1);else if(k==='-'||k==='_')lmZoom(-1);else if(k.startsWith('Arrow')){LM.cx+=k==='ArrowLeft'?-step:k==='ArrowRight'?step:0;LM.cy+=k==='ArrowUp'?-step:k==='ArrowDown'?step:0;lmRender()}else return;e.preventDefault()});
  $('lmIn').onclick=()=>lmZoom(1);$('lmOut').onclick=()=>lmZoom(-1);$('lmBig').onclick=()=>lmSetBig(!box.classList.contains('big'));$('lmFit').onclick=lmFitLot;
- $('lotBearing').addEventListener('input',e=>{S.site.bearing=Number(e.target.value);lmSyncBearing();lmRender()});$('lotBearing').addEventListener('change',()=>commit());
+ $('lotBearing').addEventListener('input',e=>{S.site.bearing=Number(e.target.value);lmSyncBearing();lmRender();gmSync()});
+ $('mapGround').addEventListener('change',e=>{S.site.mapGround=e.target.checked;gmSync();commit()});$('lotBearing').addEventListener('change',()=>commit());
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('big'))lmSetBig(false)});lmSyncBearing();
  for(const id of['siteLat','siteLng'])$(id).addEventListener('input',()=>lmFromInputs(true));
  LM.ready=true;lmRender()}
@@ -1702,9 +1710,43 @@ function renderHazardRings(){const box=$('hazardRings'),h=S.hazard;if(!h?.result
  const notes=hazardLayers(h).map(([k,name])=>{const g=h.results[k]?.rings?.at(-1);return g&&g.max_level?`${esc(name)}: ${100-g.share.none}% of the area within ${g.radius_m} m is in a mapped hazard area (${g.share.low}% low, ${g.share.medium}% medium, ${g.share.high}% high).`:''}).filter(Boolean);
  box.innerHTML=`<table class="hz"><thead><tr><th scope="col">Highest level</th><th scope="col">Lot</th>${radii.map(r=>`<th scope="col">${r} m</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>${notes.map(t=>`<p class="help">${t}</p>`).join('')}<p class="help">None means NOAH maps no hazard there. It is not a guarantee of low risk. Earthquake data (PHIVOLCS) is not installed yet.</p>`}
 function hazardReportText(){const h=S.hazard;if(!h?.results||!Object.values(h.results).some(r=>Array.isArray(r.rings)))return '';return '<p><b>Lot and surroundings (Project NOAH)</b><br>'+hazardLayers(h).map(([k,name])=>{const r=h.results[k];if(!Array.isArray(r?.rings))return esc(name)+': '+(r?.status==='outside_area'?'outside the installed data area':'data not installed');return esc(name)+': lot '+HZ_NAMES[r.level||0].toLowerCase()+' · '+r.rings.map(g=>'within '+g.radius_m+' m '+(g.max_level?'up to '+HZ_NAMES[g.max_level].toLowerCase()+' ('+(100-g.share.none)+'% of area)':'none mapped')).join(' · ')}).join('<br>')+'</p><p class="help">Highest NOAH hazard level found at the lot pin and inside each circle, sampled every 20 m. No mapped hazard is not a guarantee of low risk. Concept screening only.</p>'}
-{const sync0=syncUI;syncUI=function(){sync0();if(LM.ready){lmFromInputs(true);lmSyncBearing();lmRender()}renderHazardRings()}}
+{const sync0=syncUI;syncUI=function(){sync0();if(LM.ready){if(LM.pin&&LM.forS===S&&!S.location&&$('siteLat').value===''){$('siteLat').value=LM.pin[0].toFixed(6);$('siteLng').value=LM.pin[1].toFixed(6)}lmFromInputs(true);lmSyncBearing();lmRender();$('mapGround').checked=S.site.mapGround!==false;gmSync()}renderHazardRings()}}
 {const ready0=renderReadiness;renderReadiness=function(){ready0();$('readinessReport').insertAdjacentHTML('beforeend',hazardReportText());renderHazardRings();if(LM.ready&&!LM.drag)lmRender()}}
-lmInit();
+/* Street map as the ground: one north-up picture of the area around the pin (OpenStreetMap tiles through tile.php),
+   drawn under the 2D plan and laid around the lot in the 3D model, both turned by the lot direction. */
+var GM=null;
+const GM_Z=18,GM_N=1536;// zoom 18, 1536 px: about 900 m across at this latitude (49 tiles, cached by tile.php)
+function gmInit(){const c=document.createElement('canvas');c.width=c.height=GM_N;GM={canvas:c,ctx:c.getContext('2d'),key:'',mpp:1,ok:false,tex:null,mesh:null,timer:0,dirty:false};
+ const n=document.createElement('div');n.id='northArrow';n.title='North';n.hidden=true;n.innerHTML='<svg viewBox="0 0 46 46" aria-hidden="true"><g id="northNeedle"><path d="M23 6 30 26 23 22 16 26Z" fill="#b91c1c"/><path d="M23 40 16 26 23 30 30 26Z" fill="#94a3b8"/><text x="23" y="19.5" text-anchor="middle" font-size="8" font-weight="700" font-family="Inter,sans-serif" fill="#fff">N</text></g></svg>';wrap.appendChild(n);
+ const a=document.createElement('div');a.id='gmAttr';a.hidden=true;a.innerHTML='© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';wrap.appendChild(a);
+ setInterval(gmCompass,150)}
+/* Frame around the lot in lot coordinates (x along the width, z along the depth), with picture coordinates for each corner. */
+function gmArrays(bearing,sw,sd,side){const t=bearing*Math.PI/180,c=Math.cos(t),n=Math.sin(t),H=side/2/Math.SQRT2,hx=Math.min(sw/2,H),hz=Math.min(sd/2,H);
+ const pts=[[-H,-H],[H,-H],[H,H],[-H,H],[-hx,-hz],[hx,-hz],[hx,hz],[-hx,hz]],pos=new Float32Array(24),uv=new Float32Array(16),nor=new Float32Array(24);
+ pts.forEach(([x,z],i)=>{pos[i*3]=x;pos[i*3+2]=z;nor[i*3+1]=1;uv[i*2]=.5+(x*c-z*n)/side;uv[i*2+1]=.5-(x*n+z*c)/side});
+ return{pos,uv,nor,idx:[0,4,5,0,5,1,1,5,6,1,6,2,2,6,7,2,7,3,3,7,4,3,4,0]}}
+function gmEdgeY(){const sw=S.site.width/2,sd=S.site.depth/2;let y=Infinity;for(let i=0;i<=40;i++){const u=-1+i/20;y=Math.min(y,baseH(u*sw,-sd),baseH(u*sw,sd),baseH(-sw,u*sd),baseH(sw,u*sd))}return y-.03}
+function gmLoad(){const[la,lo]=LM.pin,key=la.toFixed(5)+','+lo.toFixed(5);if(key===GM.key)return;GM.key=key;GM.mpp=156543.03392*Math.cos(la*Math.PI/180)/2**GM_Z;
+ const x=GM.ctx;x.fillStyle='#dfe3dc';x.fillRect(0,0,GM_N,GM_N);const[cx,cy]=lmProj(la,lo,GM_Z),x0=cx-GM_N/2,y0=cy-GM_N/2,n=2**GM_Z;
+ for(let ty=Math.max(0,Math.floor(y0/256));ty<=Math.min(n-1,Math.floor((y0+GM_N)/256));ty++)for(let tx=Math.floor(x0/256);tx<=Math.floor((x0+GM_N)/256);tx++){const im=new Image();im.onload=()=>{if(GM.key!==key)return;x.drawImage(im,Math.round(tx*256-x0),Math.round(ty*256-y0));gmChanged()};im.src=`tile.php?z=${GM_Z}&x=${((tx%n)+n)%n}&y=${ty}`}}
+function gmChanged(){if(GM.dirty)return;GM.dirty=true;requestAnimationFrame(()=>{GM.dirty=false;if(GM.tex)GM.tex.needsUpdate=true;draw2D()})}
+function gmSchedule(){if(!GM)return;clearTimeout(GM.timer);GM.timer=setTimeout(gmSync,700)}
+function gmSync(){if(!GM)return;const on=S.site.mapGround!==false&&!!LM.pin;GM.ok=on;$('gmAttr').hidden=!on;
+ if(on){gmLoad();try{gmMesh3D()}catch(e){console.warn('Map ground (3D):',e)}}else if(GM.mesh)GM.mesh.visible=false;
+ gmCompass();draw2D()}
+function gmMesh3D(){if(!scene||!renderer)return;const a=gmArrays(lotBearing(),S.site.width,S.site.depth,GM_N*GM.mpp),g=new THREE.BufferGeometry();
+ g.setAttribute('position',new THREE.BufferAttribute(a.pos,3));g.setAttribute('normal',new THREE.BufferAttribute(a.nor,3));g.setAttribute('uv',new THREE.BufferAttribute(a.uv,2));g.setIndex(a.idx);
+ if(!GM.mesh){GM.tex=new THREE.CanvasTexture(GM.canvas);GM.tex.colorSpace=THREE.SRGBColorSpace;GM.tex.anisotropy=8;GM.mesh=new THREE.Mesh(g,new THREE.MeshStandardMaterial({map:GM.tex,roughness:1,metalness:0,side:THREE.DoubleSide,fog:false}));GM.mesh.receiveShadow=true;scene.add(GM.mesh)}
+ else{GM.mesh.geometry.dispose();GM.mesh.geometry=g}
+ GM.tex.needsUpdate=true;GM.mesh.position.y=gmEdgeY();GM.mesh.visible=true}
+function drawGroundMap2D(ctx){if(!GM||!GM.ok)return;const side=GM_N*GM.mpp*pv.s;ctx.save();ctx.translate(pv.ox,pv.oy);ctx.rotate(-lotBearing()*Math.PI/180);ctx.drawImage(GM.canvas,-side/2,-side/2,side,side);ctx.restore()}
+/* North arrow: in the 2D plan north is the top of the plan turned back by the lot direction; in 3D it follows the camera. */
+function gmCompass(){const el=document.getElementById('northNeedle');if(!el)return;$('northArrow').hidden=!LM.pin||view==='2d';if(!LM.pin)return;const t=lotBearing()*Math.PI/180;let deg=-lotBearing();
+ if(view!=='2d'&&camera){const e=camera.matrixWorld.elements,nx=-Math.sin(t),nz=-Math.cos(t);let fx=-e[8],fz=-e[10];if(Math.hypot(fx,fz)<.15){fx=e[4];fz=e[6]}const a=Math.atan2(nx*e[0]+nz*e[2],nx*fx+nz*fz)*180/Math.PI;if(Number.isFinite(a)&&Math.hypot(fx,fz)>1e-6)deg=a}
+ el.setAttribute('transform',`rotate(${deg.toFixed(1)} 23 23)`)}
+{const rebuild0=rebuild;rebuild=function(){rebuild0();if(GM&&LM.ready)gmSync()}}
+gmInit();
+lmInit();gmSync();
 // Settings and layout changes refresh the report, without rebuilding the scene.
 document.addEventListener('change',()=>renderReadiness());
 

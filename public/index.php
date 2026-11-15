@@ -294,6 +294,7 @@ canvas#plan2d{display:none;cursor:default}
       <div class="field"><label for="lotBearing">Lot direction <output id="lotBearingOut"></output></label><input type="range" id="lotBearing" min="0" max="359" step="1" value="0"></div>
       <div class="row lm-bar"><button id="lmFit" type="button">Zoom to lot</button></div>
       <label class="help lm-check"><input type="checkbox" id="mapGround" checked> Show the street map around the lot in the 2D plan and 3D model</label>
+      <p class="help" id="gmElevNote" role="status"></p>
       <div class="field"><label for="hazardOverlay">Hazard colours on the map</label><select id="hazardOverlay"><option value="off">Off</option><option value="flood">Flood</option><option value="landslide">Landslide</option><option value="surge">Storm surge</option></select></div>
       <p class="help" id="hzLegend" hidden><span class="sw" style="background:#eab30890"></span> low&ensp;<span class="sw" style="background:#f9731690"></span> medium&ensp;<span class="sw" style="background:#dc262690"></span> high · NOAH hazard areas within about 600 m</p>
       <div class="help" id="hzOverlayNote" role="status"></div>
@@ -1727,13 +1728,23 @@ var GM=null;
 const GM_Z=18,GM_N=1536;// zoom 18, 1536 px: about 900 m across at this latitude (49 tiles, cached by tile.php)
 function gmInit(){const mk=()=>{const c=document.createElement('canvas');c.width=c.height=GM_N;return c};const c=mk(),ov=mk(),out=mk();GM={canvas:c,ctx:c.getContext('2d'),over:ov,overCtx:ov.getContext('2d'),out,outCtx:out.getContext('2d'),ox:0,oy:0,key:'',mpp:1,ok:false,tex:null,mesh:null,timer:0,dirty:false};
  const n=document.createElement('div');n.id='northArrow';n.title='North';n.hidden=true;n.innerHTML='<svg viewBox="0 0 46 46" aria-hidden="true"><g id="northNeedle"><path d="M23 6 30 26 23 22 16 26Z" fill="#b91c1c"/><path d="M23 40 16 26 23 30 30 26Z" fill="#94a3b8"/><text x="23" y="19.5" text-anchor="middle" font-size="8" font-weight="700" font-family="Inter,sans-serif" fill="#fff">N</text></g></svg>';wrap.appendChild(n);
- const a=document.createElement('div');a.id='gmAttr';a.hidden=true;a.innerHTML='© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';wrap.appendChild(a);
+ const a=document.createElement('div');a.id='gmAttr';a.hidden=true;a.innerHTML='© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors<span id="gmTerrainCredit" hidden> · terrain © DLR e.V. and Airbus Defence and Space, provided under COPERNICUS by the European Union and ESA</span>';wrap.appendChild(a);
  setInterval(gmCompass,150)}
-/* Frame around the lot in lot coordinates (x along the width, z along the depth), with picture coordinates for each corner. */
-function gmArrays(bearing,sw,sd,side){const t=bearing*Math.PI/180,c=Math.cos(t),n=Math.sin(t),H=side/2/Math.SQRT2,hx=Math.min(sw/2,H),hz=Math.min(sd/2,H);
- const pts=[[-H,-H],[H,-H],[H,H],[-H,H],[-hx,-hz],[hx,-hz],[hx,hz],[-hx,hz]],pos=new Float32Array(24),uv=new Float32Array(16),nor=new Float32Array(24);
- pts.forEach(([x,z],i)=>{pos[i*3]=x;pos[i*3+2]=z;nor[i*3+1]=1;uv[i*2]=.5+(x*c-z*n)/side;uv[i*2+1]=.5-(x*n+z*c)/side});
- return{pos,uv,nor,idx:[0,4,5,0,5,1,1,5,6,1,6,2,2,6,7,2,7,3,3,7,4,3,4,0]}}
+/* Ground around the lot as a grid in lot coordinates (x along the width, z along the depth), with picture
+   coordinates for each point. Points that fall inside the lot are moved to its edge, so the lot's own terrain
+   shows through. With elevation data (a north-up grid of heights around the pin) each point is raised or
+   lowered by its height relative to the pin; the relief fades in over the first 60 m so it meets the lot edge. */
+const GM_GRID=64,GM_FADE=60;
+function gmTerrain(bearing,sw,sd,side,elev){const t=bearing*Math.PI/180,c=Math.cos(t),n=Math.sin(t),H=side/2/Math.SQRT2,hx=Math.min(sw/2,H*.9),hz=Math.min(sd/2,H*.9),N=GM_GRID,V=N+1;
+ const pos=new Float32Array(V*V*3),uv=new Float32Array(V*V*2),nor=new Float32Array(V*V*3),inside=new Uint8Array(V*V),idx=[];
+ const half=elev?(elev.n-1)/2:0,rel=(e,sth)=>{let gj=e/elev.step+half,gi=-sth/elev.step+half;gj=Math.max(0,Math.min(elev.n-1.001,gj));gi=Math.max(0,Math.min(elev.n-1.001,gi));const j0=Math.floor(gj),i0=Math.floor(gi),tx=gj-j0,ty=gi-i0,h=elev.h,a=h[i0*elev.n+j0],b=h[i0*elev.n+j0+1],d=h[(i0+1)*elev.n+j0],f=h[(i0+1)*elev.n+j0+1];return(a*(1-tx)+b*tx)*(1-ty)+(d*(1-tx)+f*tx)*ty-elev.point};
+ for(let r=0;r<V;r++)for(let q=0;q<V;q++){let x=-H+2*H*q/N,z=-H+2*H*r/N;const k=r*V+q;
+  if(Math.abs(x)<hx&&Math.abs(z)<hz){inside[k]=1;const dx=hx-Math.abs(x),dz=hz-Math.abs(z);if(dx<dz)x=x<0?-hx:hx;else z=z<0?-hz:hz}
+  const e=x*c-z*n,sth=x*n+z*c;let y=0;
+  if(elev){const out=Math.hypot(Math.max(0,Math.abs(x)-hx),Math.max(0,Math.abs(z)-hz)),f=Math.min(1,out/GM_FADE);y=rel(e,sth)*f*f*(3-2*f)}
+  pos[k*3]=x;pos[k*3+1]=y;pos[k*3+2]=z;nor[k*3+1]=1;uv[k*2]=.5+e/side;uv[k*2+1]=.5-sth/side}
+ for(let r=0;r<N;r++)for(let q=0;q<N;q++){const a=r*V+q,b=a+1,d=a+V,f=d+1;if(inside[a]&&inside[b]&&inside[d]&&inside[f])continue;idx.push(a,d,b,b,d,f)}
+ return{pos,uv,nor,idx,relief:!!elev}}
 function gmEdgeY(){const sw=S.site.width/2,sd=S.site.depth/2;let y=Infinity;for(let i=0;i<=40;i++){const u=-1+i/20;y=Math.min(y,baseH(u*sw,-sd),baseH(u*sw,sd),baseH(-sw,u*sd),baseH(sw,u*sd))}return y-.03}
 function gmLoad(){const[la,lo]=LM.pin,key=la.toFixed(5)+','+lo.toFixed(5);if(key===GM.key)return;GM.key=key;GM.mpp=156543.03392*Math.cos(la*Math.PI/180)/2**GM_Z;
  const x=GM.ctx;x.fillStyle='#dfe3dc';x.fillRect(0,0,GM_N,GM_N);const[cx,cy]=lmProj(la,lo,GM_Z),x0=cx-GM_N/2,y0=cy-GM_N/2,n=2**GM_Z;GM.ox=x0;GM.oy=y0;
@@ -1742,8 +1753,19 @@ function gmChanged(){if(GM.dirty)return;GM.dirty=true;requestAnimationFrame(()=>
 function gmSchedule(){if(!GM)return;clearTimeout(GM.timer);GM.timer=setTimeout(gmSync,700)}
 function gmSync(){if(!GM)return;const on=S.site.mapGround!==false&&!!LM.pin;GM.ok=on;$('gmAttr').hidden=!on;
  if(LM.pin&&(on||hazardOverlayKind()))gmLoad();
+ gmElevLoad();
  if(on){try{gmMesh3D()}catch(e){console.warn('Map ground (3D):',e)}}else if(GM.mesh)GM.mesh.visible=false;
  gmCompass();gmOverlayLoad();draw2D()}
+/* Real heights around the pin (elevation.php, Copernicus DEM): shapes the 3D ground and reports the height at the pin. */
+function gmElevNote(){const el=$('gmElevNote'),v=GM.elev;if(!LM.pin||!v||v.key!==GM.key){el.textContent='';return}
+ el.textContent=v.status==='ok'?'Ground at the pin: about '+v.point.toFixed(1)+' m above sea level. In the 3D model the land around the lot follows real heights (Copernicus DEM, 30 m data), so it shows hills and valleys nearby but not small slopes inside the lot.':v.status==='unavailable'?'Real terrain data is not installed on this server, so the land around the lot is shown flat.':v.status==='outside_area'?'There is no terrain data for this location, so the land around the lot is shown flat.':'Terrain heights could not be loaded, so the land around the lot is shown flat.'}
+async function gmElevLoad(){if(!LM.pin||!GM.key){gmElevNote();return}const key=GM.key;if(GM.elev&&GM.elev.key===key){gmElevNote();return}
+ const req=GM.elevReq=(GM.elevReq||0)+1;let v={key,status:'error'};
+ try{const res=await fetch('elevation.php?lat='+LM.pin[0]+'&lng='+LM.pin[1]),d=await res.json().catch(()=>({}));
+  if(res.ok)v=d.status==='ok'&&Array.isArray(d.heights)&&d.heights.length===d.n*d.n?{key,status:'ok',n:d.n,step:d.step_m,h:d.heights,point:d.point_m,credit:d.attribution||''}:{key,status:d.status==='unavailable'||d.status==='outside_area'?d.status:'error'}}catch(e){}
+ if(req!==GM.elevReq||GM.key!==key)return;GM.elev=v;gmElevNote();
+ $('gmAttr').title=v.status==='ok'?'Terrain: '+v.credit:'';$('gmTerrainCredit').hidden=v.status!=='ok';
+ if(GM.ok)try{gmMesh3D()}catch(e){console.warn('Map ground (3D):',e)}}
 /* Hazard colours on the ground map: the NOAH records within 600 m (hazard.php?cells=1), painted level by level. */
 const HZO={key:'',painted:'',data:null,req:0};
 function hzNoteText(label){const d=HZO.data;if(!d)return '';return d.status==='unavailable'?label+': data is not installed on this server.':d.status==='outside_area'?'The pin is outside the installed hazard data.':!d.features.length?label+': NOAH maps nothing within 600 m of the pin. That is not a guarantee of low risk.':label+' painted on the map. Unpainted land is not a guarantee of low risk.'+(GM.ok?'':' Turn on the street map above to colour the 2D plan and 3D model too.')}
@@ -1768,8 +1790,8 @@ async function gmOverlayLoad(){const k=hazardOverlayKind(),note=$('hzOverlayNote
   note.textContent=hzNoteText(label);
   gmOverlayPaint()}
  catch(e){if(req===HZO.req){HZO.key='';note.textContent='Could not load hazard areas: '+e.message}}}
-function gmMesh3D(){if(!scene||!renderer)return;const a=gmArrays(lotBearing(),S.site.width,S.site.depth,GM_N*GM.mpp),g=new THREE.BufferGeometry();
- g.setAttribute('position',new THREE.BufferAttribute(a.pos,3));g.setAttribute('normal',new THREE.BufferAttribute(a.nor,3));g.setAttribute('uv',new THREE.BufferAttribute(a.uv,2));g.setIndex(a.idx);
+function gmMesh3D(){if(!scene||!renderer)return;const a=gmTerrain(lotBearing(),S.site.width,S.site.depth,GM_N*GM.mpp,GM.elev&&GM.elev.key===GM.key&&GM.elev.h?GM.elev:null),g=new THREE.BufferGeometry();
+ g.setAttribute('position',new THREE.BufferAttribute(a.pos,3));g.setAttribute('normal',new THREE.BufferAttribute(a.nor,3));g.setAttribute('uv',new THREE.BufferAttribute(a.uv,2));g.setIndex(a.idx);if(a.relief)g.computeVertexNormals();
  if(!GM.mesh){GM.tex=new THREE.CanvasTexture(GM.out);GM.tex.colorSpace=THREE.SRGBColorSpace;GM.tex.anisotropy=8;GM.mesh=new THREE.Mesh(g,new THREE.MeshStandardMaterial({map:GM.tex,roughness:1,metalness:0,side:THREE.DoubleSide,fog:false}));GM.mesh.receiveShadow=true;scene.add(GM.mesh)}
  else{GM.mesh.geometry.dispose();GM.mesh.geometry=g}
  GM.tex.needsUpdate=true;GM.mesh.position.y=gmEdgeY();GM.mesh.visible=true}

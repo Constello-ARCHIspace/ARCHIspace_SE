@@ -25,7 +25,6 @@ function htmlEscape(string $value): string
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title><?= htmlEscape($appTitle) ?></title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="assets/fonts.css" rel="stylesheet">
 <style>
 :root{--bg:#090d12;--panel:#10151c;--panel2:#161d27;--panel3:#1d2633;--line:#222c3a;--line2:#2f3b4e;--text:#e9eef5;--muted:#8592a6;--accent:#f2b84b;--accent2:#4fd1c5;--danger:#ff6b7a;--r:10px;--mono:'IBM Plex Mono',ui-monospace,Menlo,monospace}
@@ -360,6 +359,7 @@ canvas#plan2d{display:none;cursor:default}
     <div id="comparePanel" style="display:none;position:absolute;right:12px;top:12px;width:44%;background:#101821;border:1px solid #5c946f;z-index:5;padding:8px;pointer-events:none"><b>Suggested concept · 2D</b><canvas id="workspaceCompare" width="520" height="320" style="width:100%"></canvas></div><div class="hud"><b id="viewTitle">3D model</b><span id="hint"></span></div>
     <div class="simbar" id="simBar">● Simulation running</div>
     <div class="toast" id="toast"></div>
+    <div id="no3dNotice" role="status" hidden style="position:absolute;right:12px;bottom:12px;z-index:6;max-width:360px;background:#fff8e6;border:1px solid #e0c27a;border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.5;color:#4a3b12;box-shadow:0 2px 8px rgba(0,0,0,.08)"><b>3D view could not start.</b> The 2D plan is shown instead, and all other tools still work. <button type="button" id="retry3d" style="margin-left:6px">Retry 3D</button></div>
     <div class="pills"><div class="pill" id="pSite"></div><div class="pill" id="pRooms"></div><div class="pill" id="pObjs"></div></div>
     <div class="pill coords" id="coords" style="display:none"></div>
   </div>
@@ -439,8 +439,9 @@ canvas#plan2d{display:none;cursor:default}
  </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<!-- Libraries are served from this server (public/assets/vendor) so the studio works without outside CDNs. -->
+<script src="assets/vendor/pdf.min.js"></script>
+<script src="assets/vendor/three.min.js"></script>
 <dialog id="reviewSubmissionDialog"><div class="guide-heading"><h2>Submit for human review</h2><button type="button" id="closeReviewSubmission" aria-label="Close review form">×</button></div><form action="submit-project.php" method="post" id="reviewSubmissionForm"><input type="hidden" name="csrf" value="<?= esc($_SESSION['csrf']) ?>"><input type="hidden" name="snapshot" id="reviewSnapshot"><label>Project name<input id="reviewName" name="name" maxlength="100" required></label><label>Building type<select name="kind"><option>House</option><option>Commercial</option><option>Mixed use</option></select></label><label>Review request<textarea name="request" maxlength="2000" rows="4" placeholder="What would you like your reviewer to focus on?"></textarea></label><p>This shares a saved snapshot and its blueprint images with Admins and your assigned reviewer. Later changes remain in your studio until you submit again.</p><p id="reviewSubmissionStatus" role="status"></p><button class="primary" id="confirmReviewSubmission">Submit for review</button></form></dialog>
 <script>
 (()=>{'use strict';
@@ -603,8 +604,14 @@ function floorTopAt(x,z,m=.12,L=0){let best=null;for(const r of S.rooms)if(lvl(r
 
 /* ---------- three.js ---------- */
 function mat(color,o={}){const k=color+JSON.stringify(o);let m=matCache.get(k);if(!m){m=new THREE.MeshStandardMaterial({color,roughness:o.r??.75,metalness:o.m??0,transparent:o.t!==undefined,opacity:o.t??1,flatShading:!!o.flat});if(o.glass){m.emissive=new THREE.Color(0xffd48a);m.emissiveIntensity=0;glassMats.add(m)}matCache.set(k,m)}return m}
+// Without the 3D library the studio still opens: panels are filled and the 2D plan is shown.
+function start2DOnly(){
+ $('no3dNotice').hidden=false;$('retry3d').onclick=()=>location.reload();
+ for(const id of ['v3d','vTop','playBtn']){const b=$(id);if(b){b.disabled=true;b.title='3D view unavailable'}}
+ rebuild();
+}
 function init3D(){
- if(!window.THREE){toast('3D engine could not load — check your internet connection');return}
+ if(!window.THREE){start2DOnly();return}
  renderer=new THREE.WebGLRenderer({canvas:cv3,antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
  scene=new THREE.Scene();scene.fog=new THREE.Fog(0x9cc4e6,70,230);
  camera=new THREE.PerspectiveCamera(46,1,.1,500);
@@ -938,7 +945,7 @@ function updateRoofVisibility(){
 }
 
 /* ---------- views ---------- */
-function setView(v){if(playMode&&v!==view)exitPlay();if(v!==view)roofOverride=null;view=v;const is2=v==='2d';cv3.style.display=is2?'none':'block';plan.style.display=is2?'block':'none';$('coords').style.display='none';
+function setView(v){if(!scene&&v!=='2d')v='2d';if(playMode&&v!==view)exitPlay();if(v!==view)roofOverride=null;view=v;const is2=v==='2d';cv3.style.display=is2?'none':'block';plan.style.display=is2?'block':'none';$('coords').style.display='none';
  ['3d','2d','Top'].forEach(k=>$('v'+k).classList.toggle('on',(k==='3d'&&v==='3d')||(k==='2d'&&v==='2d')||(k==='Top'&&v==='top')));
  $('viewTitle').textContent=v==='3d'?'3D model':v==='2d'?'Floor plan · '+floorName(curFloor):'Top view';
  $('hint').textContent=is2?'Drag to move · corner handle resizes a room · drag empty space or right-drag to pan · scroll to zoom':'Drag items to move · drag empty space to orbit · Shift/right-drag to pan · scroll to zoom';
@@ -1164,7 +1171,7 @@ function initBpUI(){
 async function blueprintDataUrl(file,pageNumber=1){
   if(file.type==='application/pdf'||/\.pdf$/i.test(file.name)){
     if(!window.pdfjsLib)throw Error('PDF preview library is unavailable. Try PNG or JPG.');
-    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    pdfjsLib.GlobalWorkerOptions.workerSrc='assets/vendor/pdf.worker.min.js';
     const doc=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
     try{
       const page=await doc.getPage(pageNumber),natural=page.getViewport({scale:1});

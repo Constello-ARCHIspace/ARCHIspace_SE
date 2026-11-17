@@ -1409,7 +1409,12 @@ function roomLayoutBounds(rooms){
   const xs=rooms.map(r=>r.x-r.w/2),xe=rooms.map(r=>r.x+r.w/2),zs=rooms.map(r=>r.z-r.d/2),ze=rooms.map(r=>r.z+r.d/2);
   return{x0:Math.min(...xs),x1:Math.max(...xe),z0:Math.min(...zs),z1:Math.max(...ze)};
 }
+// Why the last call to makeBlueprintSuggestion returned no suggestion (shown to the user).
+let suggestionSkipReason='';
 function makeBlueprintSuggestion(bp,img){
+  suggestionSkipReason='';
+  // The starter layouts are homes, so they are never offered for commercial or mixed-use buildings.
+  if((S.site.kind||'House')!=='House'){suggestionSkipReason='Design suggestions are available for houses only. Your '+S.site.kind.toLowerCase()+' blueprint was added as an overlay that you can trace.';return null}
   const info=inspectBlueprintImage(img,bp),plotArea=S.site.width*S.site.depth;
   let templateIndex;
   if(bp.type==='lot'||plotArea<440||S.site.width<19||S.site.depth<16||info.aspect<.82)templateIndex=1; // compact home
@@ -1418,6 +1423,13 @@ function makeBlueprintSuggestion(bp,img){
   // Upper floors: no garage template, and the layout is fitted to the outline of the floor below.
   const L=bp.type==='house'?lvl(bp):0,below=L?S.rooms.filter(r=>lvl(r)===L-1):[];
   if(L&&templateIndex===2)templateIndex=0;
+  // Never suggest a layout that is the same as the current floor, or a copy of the floor below.
+  const roomSig=rs=>rs.map(r=>r.name).sort().join('|');
+  const avoid=new Set([roomSig(S.rooms.filter(r=>lvl(r)===L))]);if(L)avoid.add(roomSig(S.rooms.filter(r=>lvl(r)===L-1)));
+  const firstChoice=templateIndex;
+  const order=[templateIndex,...TEMPLATES.map((_,i)=>i).filter(i=>i!==templateIndex&&!(L&&i===2))];
+  templateIndex=order.find(i=>!avoid.has(roomSig(makeTemplate(TEMPLATES[i].def).rooms)));
+  if(templateIndex===undefined){suggestionSkipReason=L?'No different suggestion for '+floorName(L)+': every starter layout matches this floor or the floor below.':'Your current design already matches the starter layout for this blueprint, so there is no different suggestion to show.';return null}
   const source=TEMPLATES[templateIndex],starter=makeTemplate(source.def),b=roomLayoutBounds(starter.rooms);
   const width=b.x1-b.x0,depth=b.z1-b.z0;
   const targetW=Math.min(S.site.width-2.5,S.site.width*(bp.type==='lot'?.46:.58)*clamp(bp.scale,.75,1.2));
@@ -1441,7 +1453,9 @@ function makeBlueprintSuggestion(bp,img){
     :info.detail>.36?'A larger room arrangement is proposed for a line-dense blueprint.'
     :'A balanced home concept is proposed for the uploaded blueprint.';
   const where=L?`For ${floorName(L)}: ${below.length?'the layout is fitted to the outline of '+floorName(L-1)+'. ':''}`:'';
-  return {name:source.name,rooms:starter.rooms,objects:starter.objects,roof:source.def.site.roof,reason:where+reason,nBeds,level:L};
+  // If the closest match had to be skipped, say so instead of giving the closest match's reason.
+  const why=templateIndex!==firstChoice?'A different starter layout is proposed because the closest match is the same as your current design'+(L?' or the floor below':'')+'.':reason;
+  return {name:source.name,rooms:starter.rooms,objects:starter.objects,roof:source.def.site.roof,reason:where+why,nBeds,level:L};
 }
 function paintConceptPreview(canvas,rooms,objects,bp){
   const ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height,sc=Math.min((w-35)/S.site.width,(h-35)/S.site.depth);
@@ -1465,6 +1479,7 @@ function paintConceptPreview(canvas,rooms,objects,bp){
     ctx.fillStyle='#101820';ctx.font='bold 11px Inter,system-ui,sans-serif';ctx.textAlign='center';
     ctx.fillText(r.name,ox+r.x*sc,oy+r.z*sc+4,Math.max(15,r.w*sc-3));
   }
+  if(!rooms.length){ctx.fillStyle='rgba(11,19,29,.75)';ctx.fillRect(ox-120,oy-22,240,44);ctx.fillStyle='#f3f6fa';ctx.font='bold 13px Inter,system-ui,sans-serif';ctx.textAlign='center';ctx.fillText('No rooms on this floor yet',ox,oy+5)}
   // Doors and windows show as small markers over the suggested wall positions.
   for(const o of objects.filter(o=>isOpening(o.type))){
     ctx.save();ctx.translate(ox+o.x*sc,oy+o.z*sc);ctx.rotate(-o.rot*Math.PI/180);
@@ -1493,17 +1508,20 @@ function applySuggestedDesign(){
 }
 function showDesignSuggestion(bp,img){
   pendingDesignSuggestion=makeBlueprintSuggestion(bp,img);comparisonSuggestion=pendingDesignSuggestion;comparisonBlueprint=bp;
+  if(!pendingDesignSuggestion){toast(suggestionSkipReason||'No suggestion is available for this blueprint');return}
   const suggested=pendingDesignSuggestion,area=rs=>rs.reduce((sum,r)=>sum+r.w*r.d,0);
   $('suggestBlueprintName').textContent='Uploaded blueprint: '+bp.name;
   $('suggestReason').textContent=suggested.reason+' Compare both layouts before making a choice.';
   $('suggestDesignName').textContent=suggested.name+' concept';
   const L=suggested.level||0,curRooms=S.rooms.filter(r=>lvl(r)===L),curObjs=S.objects.filter(o=>lvl(o)===L&&!CAT[o.type]?.out);
   $('suggestTitle').textContent='Suggested design for '+floorName(L);
-  $('currentDesignMeta').textContent=`${floorName(L)}: ${curRooms.length} rooms · ${area(curRooms).toFixed(1)} m² · ${curObjs.length} objects. Your design will remain unchanged if you keep it. Other floors are never changed.`;
+  $('currentDesignMeta').textContent=(curRooms.length?'':`${floorName(L)} has no rooms yet, so the current design is an empty lot. `)+`${floorName(L)}: ${curRooms.length} rooms · ${area(curRooms).toFixed(1)} m² · ${curObjs.length} objects. Your design will remain unchanged if you keep it. Other floors are never changed.`;
   $('suggestDesignMeta').textContent=`${suggested.rooms.length} rooms (${suggested.nBeds} bedrooms) · ${area(suggested.rooms).toFixed(1)} m² · ${suggested.objects.length} fixtures/openings. Saved as a new design version if applied.`;
   // Readiness compares the whole building with and without the suggested floor.
   const withRooms=S.rooms.filter(r=>lvl(r)!==L).concat(suggested.rooms),withObjs=S.objects.filter(o=>CAT[o.type]?.out||lvl(o)!==L).concat(suggested.objects);
-  $('currentDesignMeta').textContent+=' · Readiness '+assessReadiness(S.rooms,S.objects,S.site.roof).score+'/100';$('suggestDesignMeta').textContent+=' · Readiness '+assessReadiness(withRooms,withObjs,L?S.site.roof:suggested.roof).score+'/100';
+  const curScore=assessReadiness(S.rooms,S.objects,S.site.roof).score,sugScore=assessReadiness(withRooms,withObjs,L?S.site.roof:suggested.roof).score;
+  $('currentDesignMeta').textContent+=' · Readiness '+curScore+'/100';$('suggestDesignMeta').textContent+=' · Readiness '+sugScore+'/100';
+  if(sugScore<curScore)$('suggestReason').textContent+=` Note: the suggestion scores lower on readiness (${sugScore} vs ${curScore}), so keeping your design may be the better choice.`;
   paintConceptPreview($('currentDesignPreview'),curRooms,curObjs,bp);
   paintConceptPreview($('suggestedDesignPreview'),suggested.rooms,suggested.objects,bp);
   $('designSuggestModal').classList.add('open');

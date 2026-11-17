@@ -26,7 +26,7 @@
 .dash-section-head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-top:8px}
 .dash-section-head h2{font-size:18px;margin:0}
 .dash-modules{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:16px}
-.dash-services{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.dash-services{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 .dash-card{display:flex;flex-direction:column;gap:10px;padding:22px;background:var(--paper);border:1px solid var(--border);border-radius:8px;color:var(--ink);min-width:0}
 a.dash-card:hover{text-decoration:none;border-color:#78936c;background:#fbfcfa}
 .dash-card h3{font-size:16px;font-weight:500;margin:10px 0 0}

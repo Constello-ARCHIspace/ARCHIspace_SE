@@ -42,7 +42,9 @@ $auth = new Auth($db, function(string $email, string $token) use ($config, $base
 function esc(string $text): string { return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 function csrfCheck(): void {
     if (!is_string($_POST['csrf'] ?? null) || !hash_equals($_SESSION['csrf'], $_POST['csrf'])) {
-        http_response_code(403); exit('Your form expired. Reload the page and try again.');
+        http_response_code(403);
+        $back = esc((string)($_SERVER['REQUEST_URI'] ?? 'auth.php'));
+        exit('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Form expired</title><h1>Your form expired.</h1><p>This usually happens when a page stays open for a long time or is opened from an old tab. Nothing was saved.</p><p><a href="' . $back . '">Reload the form</a> and try again.</p></body>');
     }
 }
 function requireUser(bool $json = false): array {

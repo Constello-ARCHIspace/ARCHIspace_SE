@@ -92,7 +92,7 @@ $initials=mb_strtoupper(mb_substr((string)$user['name'],0,2));
 <a class="button primary" href="project.php?id=<?= (int)$latest['id'] ?>">View <?= esc((string)$latest['name']) ?> →</a></div></div>
 <div class="dash-strip"><span><?= $total ?> <?= $total===1?'submission':'submissions' ?></span><span><?= $feedbackCount ?> published feedback</span><span>Concept plan · submitted snapshot</span></div></article>
 <?php else: ?>
-<article class="dash-project dash-project-empty"><?php emptyState('No projects yet','Create a project in the studio, then submit it for review and it will appear here.'); ?><a class="button primary" href="index.php">+ Create project</a></article>
+<article class="dash-project dash-project-empty"><?php emptyState('No projects yet','Create a project in the studio, then submit it for review and it will appear here.'); ?></article>
 <?php endif; ?>
 <aside class="panel dash-activity"><h2>Recent activity</h2>
 <?php if(!$events): ?><p class="hint">Nothing yet. Submitting a project and receiving feedback will show up here.</p><?php endif;foreach($events as $e): ?>
@@ -111,7 +111,6 @@ $initials=mb_strtoupper(mb_substr((string)$user['name'],0,2));
 
 <div class="dash-section-head" id="services"><h2>Services for your next decision</h2></div>
 <section class="dash-services" aria-label="Services">
-<div class="dash-card is-soon" aria-disabled="true"><div class="dash-card-top"><span class="dash-title"><?= dashIcon('sparkle') ?>AI suggestions</span></div><p>Explore layout directions grounded in your uploaded plan.</p><span class="dash-tag">Coming soon</span></div>
 <a class="dash-card" href="projects.php"><div class="dash-card-top"><span class="dash-title"><?= dashIcon('message') ?>Administrator review</span></div><p>Request human architectural feedback on your own projects.</p><span class="dash-tag">Request a review →</span></a>
 <a class="dash-card" href="index.php"><div class="dash-card-top"><span class="dash-title"><?= dashIcon('download') ?>Export report</span></div><p>Share your concept estimates, assumptions and action plan.</p><span class="dash-tag">Open studio to export →</span></a>
 </section>

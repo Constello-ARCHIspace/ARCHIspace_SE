@@ -15,3 +15,5 @@
 .furnishing-4{left:67.14259927797835%;top:79.75142857142858%;width:12.571480144404331%;height:6.75%;}
 .furnishing-5{left:70.0%;top:69.25142857142858%;width:6.428519855595667%;height:6.25%;}
 input[type=hidden]{display:none}.submit{width:100%}.story>*{flex-shrink:0}.story-copy>*{flex-shrink:0}.form-heading>*{flex-shrink:0}
+
+.pw-status{font-family:var(--mono);font-size:12px}.pw-status.ok{color:#2f7a4f}.pw-status.bad{color:#9a5a1e}

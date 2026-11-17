@@ -33,11 +33,12 @@ Do not put secrets in the browser, JavaScript, Git or the chat. The package inte
 - Registration and resend return neutral account-existence messages. SMTP failures remain visible as a service problem and leave a pending account eligible for resend.
 - Account and IP limits apply to login, registration and resend; verification is also IP-limited. CSRF protection, prepared queries, escaped output, HttpOnly/SameSite cookies, production Secure cookies, session rotation and POST-only logout are included.
 - Sessions expire after 30 minutes idle or 8 hours total. Only verified users may access the designer, blueprint endpoint and hazard endpoint.
+- **My designs:** Save stores the working design on the server (`public/designs.php`, `app/Designs.php`). Every save is a new version; the newest 20 versions per design are kept, up to 50 designs and 64 MB per account. Saves carry the version they started from, so a save from an older tab is refused instead of overwriting newer work. Open lists the account's designs with Versions, Rename and Delete. Only the owner can reach a design.
 - Blueprint ownership uses a stable account identifier. Browser project storage is namespaced by account; existing anonymous projects are not automatically assigned to a new user. Export the old project and import it after login if migration is needed.
 
 ## Data and scope limitations
 
-Working plans use browser localStorage; submitted review snapshots and blueprint images are stored privately on the server. Browser namespacing prevents accidental crossover but is not encrypted storage: anyone controlling the same browser profile can inspect local plans. Submission is explicit; editing a plan does not update a submitted snapshot. There is no automatic cloud sync, password recovery, MFA or social login. Email verification is not password reset.
+Working plans are kept in browser localStorage and, when the user presses Save, in **My designs** on the server; submitted review snapshots and blueprint images are also stored privately on the server. Browser namespacing prevents accidental crossover but is not encrypted storage: anyone controlling the same browser profile can inspect local plans. Submission is explicit; editing a plan does not update a submitted snapshot. Saving to My designs is manual (Save or Ctrl+S), not automatic sync. There is no password recovery, MFA or social login. Email verification is not password reset.
 
 Admins see all submissions. Sub-admins see only assigned submissions and their own designs. Only the author sees an unpublished feedback draft; owners see published feedback. Feedback appears in **My submissions**, not in email. Invitations use PHPMailer and grant no staff privileges. The preview shows room footprints and dimensions; submitted PNG blueprints and the full JSON snapshot are also accessible through permission-checked downloads. Downloaded blueprint references remain tied to the original owner's account; reviewers should use the attachment links in the review page.
 The original designer and hazard screening retain their existing limitations and professional-assessment disclaimer. Files under `hazard-data` remain local preprocessed data, not a live NOAH API.
@@ -64,7 +65,7 @@ Back up your project folder, database and blueprint storage privately. Replace `
 php bin/migrate.php
 ```
 
-This adds roles and review tables without deleting accounts. Existing users become standard Users. Old sessions must sign in again. Hard-refresh after replacing assets. Do not downgrade the code without restoring the matching database backup.
+This adds roles, review tables and the My designs tables without deleting accounts. Existing users become standard Users. Old sessions must sign in again. Hard-refresh after replacing assets. Do not downgrade the code without restoring the matching database backup.
 
 ## First Admin and Sub-admin access
 
@@ -87,7 +88,7 @@ Run `php tests/auth.php` for registration, hashing, verification gating, duplica
 
 Before release, also exercise HTTP flows: CSRF rejection, session ID rotation, expired sessions, POST-only logout, unauthenticated API rejection, cross-account blueprint denial, two-user browser project separation, and actual SMTP delivery. Check desktop/mobile views and keyboard navigation.
 
-Validation uses PHP 8.5.12 through WebAssembly because native PHP and Composer are unavailable here. Run `php tests/auth.php` and `php tests/admin.php` with your native PHP installation. For HTTP checks, run `npm install` then `npm test` inside `tests/` (Node.js 24+). The harness uses isolated temporary databases and sends no email. See **VALIDATION.md** for exact results and remaining checks.
+Validation uses PHP 8.5.12 through WebAssembly because native PHP and Composer are unavailable here. Run `php tests/auth.php`, `php tests/admin.php` and `php tests/designs.php` with your native PHP installation. For HTTP checks, run `npm install` then `npm test` inside `tests/` (Node.js 24+). The harness uses isolated temporary databases and sends no email. See **VALIDATION.md** for exact results and remaining checks.
 
 ## References
 

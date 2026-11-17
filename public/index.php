@@ -230,13 +230,13 @@ canvas#plan2d{display:none;cursor:default}
 <header>
   <a class="brand" href="index.php" aria-label="Archispace workspace"><span class="studio-symbol"><img src="assets/figma/studio-imgArchispaceMark.svg" alt=""></span><span>archispace</span></a>
   <div class="sep"></div>
-  <input id="projName" type="text" maxlength="48" aria-label="Project name" value="<?= htmlEscape($defaultProjectName) ?>">
+  <input id="projName" type="text" maxlength="48" aria-label="Project name" value="<?= htmlEscape($defaultProjectName) ?>"><span id="cloudState" class="cloud-state" role="status" title="Where this design is saved"></span>
   <div class="hgroup"><button id="undoBtn" class="ghost icon-button" title="Undo (Ctrl+Z)" aria-label="Undo"><img src="assets/figma/studio-imgUndo2.svg" alt=""></button><button id="redoBtn" class="ghost icon-button" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><img src="assets/figma/studio-imgRedo2.svg" alt=""></button></div>
   <div class="sp"></div>
   <button id="toolsToggle" class="only-small">☰ Tools</button>
   <button id="inspToggle" class="only-small">◧ Inspector</button>
   <button id="galleryBtn">▦ <span class="hide-s">Sample designs</span></button>
-  <button id="loadBtn">Open</button>
+  <button id="loadBtn" title="My designs: open, versions, rename, delete">Open</button>
   <button id="saveBtn">Save</button>
   <details class="menu" id="reviewMenu"><summary>Review ▾</summary><div class="menu-list"><button id="submitReviewBtn">Submit for review</button><a href="projects.php">My submissions</a><?php if ($currentUser['role'] !== 'user'): ?><a href="<?= esc(accountHome($currentUser)) ?>">Staff dashboard</a><?php endif; ?></div></details>
   <form action="logout.php" method="post"><input type="hidden" name="csrf" value="<?= esc($_SESSION['csrf']) ?>"><button type="submit" title="<?= esc($currentUser['email']) ?>">Sign out</button></form>
@@ -442,6 +442,13 @@ canvas#plan2d{display:none;cursor:default}
 <!-- Libraries are served from this server (public/assets/vendor) so the studio works without outside CDNs. -->
 <script src="assets/vendor/pdf.min.js"></script>
 <script src="assets/vendor/three.min.js"></script>
+<dialog id="designsDialog" aria-labelledby="designsTitle"><div class="guide-heading"><h2 id="designsTitle">My designs</h2><button type="button" id="closeDesigns" aria-label="Close My designs">×</button></div>
+<p id="designsCurrent" class="designs-current"></p>
+<div class="designs-actions"><button type="button" id="designsSave" class="primary">Save current design</button><button type="button" id="designsSaveNew">Save as new design</button><button type="button" id="designsNew">New blank design</button><button type="button" id="designsImport">Import project file (.json)</button></div>
+<p id="designsStatus" class="designs-status" role="status" aria-live="polite"></p>
+<div id="designsList" class="designs-list"></div>
+<p class="designs-note">Designs are private to your account until you submit one for review. Every save keeps a version; the newest 20 versions of each design are kept, and you can keep up to 50 designs.</p>
+</dialog>
 <dialog id="reviewSubmissionDialog"><div class="guide-heading"><h2>Submit for human review</h2><button type="button" id="closeReviewSubmission" aria-label="Close review form">×</button></div><form action="submit-project.php" method="post" id="reviewSubmissionForm"><input type="hidden" name="csrf" value="<?= esc($_SESSION['csrf']) ?>"><input type="hidden" name="snapshot" id="reviewSnapshot"><label>Project name<input id="reviewName" name="name" maxlength="100" required></label><label>Building type<select name="kind"><option>House</option><option>Commercial</option><option>Mixed use</option></select></label><label>Review request<textarea name="request" maxlength="2000" rows="4" placeholder="What would you like your reviewer to focus on?"></textarea></label><p>This shares a saved snapshot and its blueprint images with Admins and your assigned reviewer. Later changes remain in your studio until you submit again.</p><p id="reviewSubmissionStatus" role="status"></p><button class="primary" id="confirmReviewSubmission">Submit for review</button></form></dialog>
 <script>
 (()=>{'use strict';
@@ -536,7 +543,7 @@ const G=.25;
 
 /* ---------- history ---------- */
 let hist=[],hi=-1;
-function commit(){renderReadiness();const j=JSON.stringify(S);if(hist[hi]===j)return;hist=hist.slice(0,hi+1);hist.push(j);if(hist.length>80)hist.shift();hi=hist.length-1;try{localStorage.setItem(projectStorageKey,JSON.stringify({application:'ARCHIspace',version:'3.0',state:S}))}catch(e){}updateUndo()}
+function commit(){renderReadiness();queueMicrotask(()=>{if(typeof updateCloudBadge==='function')updateCloudBadge()});const j=JSON.stringify(S);if(hist[hi]===j)return;hist=hist.slice(0,hi+1);hist.push(j);if(hist.length>80)hist.shift();hi=hist.length-1;try{localStorage.setItem(projectStorageKey,JSON.stringify({application:'ARCHIspace',version:'3.0',state:S}))}catch(e){}updateUndo()}
 function restore(j){S=JSON.parse(j);bpImages.clear();if(sel&&!getItem(sel))sel=null;syncUI();rebuild();renderPanels()}
 function undo(){if(hi>0){hi--;restore(hist[hi]);updateUndo()}}
 function redo(){if(hi<hist.length-1){hi++;restore(hist[hi]);updateUndo()}}
@@ -1076,7 +1083,7 @@ function normalize(d){
  s.blueprints=(d.blueprints||[]).map(bp=>({...bp,id:bp.id||s.nextBpId++,name:bp.name||'Blueprint',type:bp.type==='lot'?'lot':'house',data:typeof bp.data==='string'&&(/^(data:image\/|blueprint\.php\?id=[a-f0-9]{48}$)/.test(bp.data))?bp.data:'',opacity:bp.opacity??50,scale:bp.scale??1,offsetX:bp.offsetX??0,offsetZ:bp.offsetZ??0,rotation:bp.rotation??0,visible:bp.visible!==false,w:bp.w||0,h:bp.h||0,level:bp.type==='lot'?0:lvl(bp)}));
  s.nextBpId=Math.max(s.nextBpId||1,...s.blueprints.map(b=>b.id+1));
  return s}
-function loadState(d){try{S=normalize(d);bpImages.clear();comparisonSuggestion=null;comparisonBlueprint=null;$('compareMode').value='off';sel=null;clampRooms();syncUI();rebuild();fitCamera(view==='top');fit2D();renderPanels();commit();return true}catch(e){toast('Could not load project: '+e.message);return false}}
+function loadState(d){try{S=normalize(d);if(!openingCloud){cloud=null;storeCloud()}bpImages.clear();comparisonSuggestion=null;comparisonBlueprint=null;$('compareMode').value='off';sel=null;clampRooms();syncUI();rebuild();fitCamera(view==='top');fit2D();renderPanels();commit();return true}catch(e){toast('Could not load project: '+e.message);return false}}
 $('submitReviewBtn').onclick=()=>{$('reviewMenu').open=false;$('reviewSubmissionForm').elements.kind.value=S.site.kind||'House';$('reviewName').value=S.name||'Untitled project';$('reviewSubmissionStatus').textContent='';$('reviewSubmissionDialog').showModal()};
 $('closeReviewSubmission').onclick=()=>$('reviewSubmissionDialog').close();
 $('reviewSubmissionForm').onsubmit=async e=>{
@@ -1087,8 +1094,90 @@ $('reviewSubmissionForm').onsubmit=async e=>{
  localStorage.setItem(projectStorageKey,snapshot);$('reviewSnapshot').value=snapshot;HTMLFormElement.prototype.submit.call($('reviewSubmissionForm'));
  }catch(error){$('reviewSubmissionStatus').textContent='Submission failed: '+error.message;button.disabled=false}
 };
-$('saveBtn').onclick=async()=>{try{for(const bp of S.blueprints)if(bp.data.startsWith('data:')){bp.data=await storeBlueprint(bp.data);bpImages.delete(bp.id)}commit();renderPanels();localStorage.setItem(projectStorageKey,JSON.stringify({application:'ARCHIspace',version:'3.0',state:S}));toast('Project saved; blueprint images stored on server')}catch(e){toast('Save failed: '+e.message)}};
-$('loadBtn').onclick=()=>$('loadFile').click();
+// ---- My designs: designs saved on the server, with versions (designs.php) ----
+const cloudKey=projectStorageKey+'-cloud';
+let cloud=null;try{const c=JSON.parse(localStorage.getItem(cloudKey)||'null');if(c&&/^[a-f0-9]{32}$/.test(c.id)&&Number.isInteger(c.version))cloud=c}catch(e){cloud=null}
+let openingCloud=false,pristineHash=null; // pristineHash: the untouched starter design shown to a new user
+const cloudSnapshot=()=>JSON.stringify({application:'ARCHIspace',version:'3.0',state:S});
+const hashText=t=>{let h=2166136261;for(let i=0;i<t.length;i++){h^=t.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(16)+':'+t.length};
+function storeCloud(){try{cloud?localStorage.setItem(cloudKey,JSON.stringify(cloud)):localStorage.removeItem(cloudKey)}catch(e){}}
+function cloudDirty(){return !cloud||cloud.hash!==hashText(cloudSnapshot())}
+function updateCloudBadge(){const b=$('cloudState');if(!b)return;
+ if(!cloud){b.textContent='Not saved to My designs';b.className='cloud-state off';return}
+ const dirty=cloudDirty();b.textContent=(dirty?'Unsaved changes':'Saved')+' · v'+cloud.version;b.className='cloud-state '+(dirty?'dirty':'ok')}
+function detachCloud(){cloud=null;storeCloud();updateCloudBadge()}
+async function designsApi(params,body){
+ const url='designs.php'+(params?'?'+new URLSearchParams(params):'');let res;
+ if(body){const f=new FormData();f.append('csrf',csrf);for(const k in body)f.append(k,body[k]);res=await fetch(url,{method:'POST',body:f})}else res=await fetch(url);
+ let out={};try{out=await res.json()}catch(e){}
+ if(!res.ok){const err=Error(out.error||('Request failed ('+res.status+')'));err.status=res.status;err.stale=!!out.stale;throw err}
+ return out}
+async function saveToAccount(asNew){
+ for(const bp of S.blueprints)if(bp.data.startsWith('data:')){bp.data=await storeBlueprint(bp.data);bpImages.delete(bp.id)}
+ commit();renderPanels();
+ const snapshot=cloudSnapshot();
+ if(new Blob([snapshot]).size>4*1024*1024)throw Error('This design exceeds 4 MB. Remove unused blueprints or old design versions, then save again.');
+ const body={action:'save',name:(S.name||'').trim()||'Untitled design',kind:S.site.kind||'House',snapshot};
+ if(cloud&&!asNew){body.id=cloud.id;body.base_version=cloud.version}
+ const out=await designsApi(null,body);
+ cloud={id:out.id,version:out.version,savedAt:out.saved_at,hash:hashText(snapshot)};storeCloud();
+ try{localStorage.setItem(projectStorageKey,snapshot)}catch(e){}
+ updateCloudBadge();return out}
+async function saveAndReport(asNew){
+ try{const out=await saveToAccount(asNew);toast((asNew?'Saved as a new design':'Saved to My designs')+' · version '+out.version);if($('designsDialog').open)renderDesigns();return true}
+ catch(e){if(e.stale){toast(e.message);openDesigns(e.message)}else toast('Save failed: '+e.message+' Your design is still in this browser.');return false}}
+$('saveBtn').onclick=()=>saveAndReport(false);
+const when=t=>new Date(t*1000).toLocaleString([], {dateStyle:'medium',timeStyle:'short'});
+function designsStatus(t){$('designsStatus').textContent=t||''}
+function renderCurrent(){$('designsCurrent').textContent=cloud?`Current design: "${S.name}" · version ${cloud.version}${cloudDirty()?' · unsaved changes':' · saved'}`:`Current design: "${S.name}" · not saved to My designs yet`}
+async function renderDesigns(){
+ renderCurrent();const list=$('designsList');
+ let data;try{data=await designsApi()}catch(e){list.replaceChildren();designsStatus(e.message);return}
+ list.replaceChildren();
+ if(!data.designs.length){const p=document.createElement('p');p.className='designs-empty';p.textContent='No saved designs yet. Use "Save current design" to keep this design on your account.';list.append(p);return}
+ for(const d of data.designs){
+  const row=document.createElement('div');row.className='design-row'+(cloud&&cloud.id===d.id?' current':'');
+  row.innerHTML=`<div class="design-info"><b>${esc(d.name)}</b><small>${esc(d.kind)} · version ${d.version} · saved ${esc(when(d.updated_at))}${cloud&&cloud.id===d.id?' · open now':''}</small></div><div class="design-buttons"><button type="button" data-act="open">Open</button><button type="button" data-act="versions" aria-expanded="false">Versions (${d.versions})</button><button type="button" data-act="rename">Rename</button><button type="button" data-act="delete" class="danger">Delete</button></div><div class="design-versions" hidden></div>`;
+  row.querySelector('[data-act=open]').onclick=()=>openDesign(d.id,null);
+  row.querySelector('[data-act=rename]').onclick=()=>renameDesign(d);
+  row.querySelector('[data-act=delete]').onclick=()=>deleteDesign(d);
+  row.querySelector('[data-act=versions]').onclick=e=>toggleVersions(d,row,e.currentTarget);
+  list.append(row)}
+ designsStatus(`${data.designs.length} of ${data.limit} designs`)}
+async function toggleVersions(d,row,btn){
+ const box=row.querySelector('.design-versions');if(!box.hidden){box.hidden=true;btn.setAttribute('aria-expanded','false');return}
+ box.hidden=false;btn.setAttribute('aria-expanded','true');box.textContent='Loading versions…';
+ try{const {versions}=await designsApi({id:d.id,versions:1});box.replaceChildren();
+  for(const v of versions){const line=document.createElement('div');line.className='version-row';
+   line.innerHTML=`<span>Version ${v.version}${v.version===d.version?' (latest)':''} · ${esc(when(v.saved_at))}</span><button type="button">Open this version</button>`;
+   line.querySelector('button').onclick=()=>openDesign(d.id,v.version===d.version?null:v.version);box.append(line)}}
+ catch(e){box.textContent=e.message}}
+function okToReplace(){return !cloudDirty()||(!cloud&&pristineHash===hashText(cloudSnapshot()))||confirm('Your current design has changes that are not saved to My designs. Replace it anyway?\n\nChoose Cancel, then "Save current design" to keep them.')}
+async function openDesign(id,version){
+ if(!(cloud&&cloud.id===id&&version===null&&!cloudDirty())&&!okToReplace())return;
+ designsStatus('Opening…');
+ try{const d=await designsApi(version===null?{id}:{id,version});
+  openingCloud=true;const ok=loadState(d.snapshot);openingCloud=false;if(!ok){designsStatus('');return}
+  S.name=d.name;$('projName').value=d.name;commit();
+  cloud={id:d.id,version:d.latest,savedAt:d.saved_at,hash:version===null?hashText(cloudSnapshot()):''};storeCloud();updateCloudBadge();
+  $('designsDialog').close();
+  toast(version===null?`Opened "${d.name}" · version ${d.version}`:`Opened version ${d.version} of "${d.name}". Save to make it the newest version.`)}
+ catch(e){openingCloud=false;designsStatus(e.message)}}
+async function renameDesign(d){
+ const name=prompt('New name for this design',d.name);if(name===null)return;
+ try{await designsApi(null,{action:'rename',id:d.id,name});if(cloud&&cloud.id===d.id){S.name=name.trim().replace(/\s+/g,' ');$('projName').value=S.name;commit();cloud.hash=hashText(cloudSnapshot());storeCloud();updateCloudBadge()}renderDesigns()}
+ catch(e){designsStatus(e.message)}}
+async function deleteDesign(d){
+ if(!confirm(`Delete "${d.name}" and all ${d.versions} saved versions? This cannot be undone.`))return;
+ try{await designsApi(null,{action:'delete',id:d.id});if(cloud&&cloud.id===d.id)detachCloud();designsStatus(`Deleted "${d.name}".`);renderDesigns()}
+ catch(e){designsStatus(e.message)}}
+function openDesigns(message){designsStatus(message||'');if(!$('designsDialog').open)$('designsDialog').showModal();renderDesigns().then(()=>{if(message)designsStatus(message)})}
+$('loadBtn').onclick=()=>openDesigns();
+$('closeDesigns').onclick=()=>$('designsDialog').close();
+$('designsSave').onclick=()=>saveAndReport(false);
+$('designsSaveNew').onclick=()=>saveAndReport(true);
+$('designsNew').onclick=()=>{if(!okToReplace())return;if(loadState(blank())){$('designsDialog').close();toast('New blank design. Save it to keep it in My designs.')}};
+$('designsImport').onclick=()=>{if(!okToReplace())return;$('designsDialog').close();$('loadFile').click()};
 $('loadFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{if(loadState(JSON.parse(await f.text())))toast('Project loaded')}catch(err){toast('That file is not valid project JSON')}e.target.value=''};
 function download(url,name){const a=document.createElement('a');a.href=url;a.download=name;a.click()}
 $('exportJson').onclick=()=>{const blob=new Blob([JSON.stringify({application:'ARCHIspace',version:'3.0',state:S},null,2)],{type:'application/json'}),u=URL.createObjectURL(blob);download(u,(S.name.replace(/[^\w-]+/g,'-')||'project')+'.json');setTimeout(()=>URL.revokeObjectURL(u),1500);$('exportMenu').open=false;toast('Project exported')};
@@ -1139,7 +1228,7 @@ function thumb(cv,st){const w=cv.width=520,h=cv.height=300,x=cv.getContext('2d')
  st.rooms.forEach(r=>{x.fillStyle=r.c;x.fillRect(ox+(r.x-r.w/2)*k,oy+(r.z-r.d/2)*k,r.w*k,r.d*k);x.strokeStyle='#f3f6fa';x.lineWidth=Math.max(2,T*k);x.strokeRect(ox+(r.x-r.w/2)*k,oy+(r.z-r.d/2)*k,r.w*k,r.d*k)});
  st.objects.filter(o=>o.type==='Tree').forEach(o=>{x.fillStyle='#2f7a4a';x.beginPath();x.arc(ox+o.x*k,oy+o.z*k,o.w*k/2,0,7);x.fill()})}
 function openGallery(){const g=$('gallery');g.innerHTML='';
- TEMPLATES.concat([{name:'Blank plot',desc:'Start from scratch on an empty site.',tags:['empty'],def:null}]).forEach(t=>{const c=document.createElement('div');c.className='gcard';const cv=document.createElement('canvas');const st=t.def?makeTemplate(t.def):blank();thumb(cv,st);const info=document.createElement('div');info.className='ginfo';info.innerHTML=`<h3>${esc(t.name)}</h3><p>${esc(t.desc)}</p><div class="tags">${t.tags.map(x=>`<span>${esc(x)}</span>`).join('')}${t.def?`<span>${st.rooms.reduce((s,r)=>s+r.w*r.d,0).toFixed(0)} m²</span>`:''}</div>`;const b=document.createElement('button');b.className='primary';b.style.width='100%';b.textContent=t.def?'Use this design':'Start blank';b.onclick=()=>{S=st;sel=null;$('galleryModal').classList.remove('open');syncUI();rebuild();setView('3d');fitCamera();renderPanels();commit();toast(t.name+' loaded — make it your own')};info.append(b);c.append(cv,info);g.append(c)});
+ TEMPLATES.concat([{name:'Blank plot',desc:'Start from scratch on an empty site.',tags:['empty'],def:null}]).forEach(t=>{const c=document.createElement('div');c.className='gcard';const cv=document.createElement('canvas');const st=t.def?makeTemplate(t.def):blank();thumb(cv,st);const info=document.createElement('div');info.className='ginfo';info.innerHTML=`<h3>${esc(t.name)}</h3><p>${esc(t.desc)}</p><div class="tags">${t.tags.map(x=>`<span>${esc(x)}</span>`).join('')}${t.def?`<span>${st.rooms.reduce((s,r)=>s+r.w*r.d,0).toFixed(0)} m²</span>`:''}</div>`;const b=document.createElement('button');b.className='primary';b.style.width='100%';b.textContent=t.def?'Use this design':'Start blank';b.onclick=()=>{S=st;detachCloud();sel=null;$('galleryModal').classList.remove('open');syncUI();rebuild();setView('3d');fitCamera();renderPanels();commit();toast(t.name+' loaded — make it your own')};info.append(b);c.append(cv,info);g.append(c)});
  $('galleryModal').classList.add('open')}
 $('galleryBtn').onclick=openGallery;document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('galleryModal').classList.contains('open')){e.preventDefault();$('galleryModal').classList.remove('open')}});$('closeGallery').onclick=()=>$('galleryModal').classList.remove('open');$('galleryModal').onclick=e=>{if(e.target===$('galleryModal'))$('galleryModal').classList.remove('open')};
 
@@ -1837,6 +1926,7 @@ initBpUI();
 buildPalettes();
 let loaded=false;try{const raw=localStorage.getItem(projectStorageKey);if(raw){S=normalize(JSON.parse(raw));loaded=true}}catch(e){loaded=false;S=blank()}
 if(!loaded)S=makeTemplate(TEMPLATES[0].def);
+if(!loaded)setTimeout(()=>{if(!cloud)pristineHash=hashText(cloudSnapshot())},0);
 syncUI();init3D();setView('3d');renderPanels();commit();
 window.__archi={get S(){return S},select,rebuild,addRoom,addObject,setView,loadState,TEMPLATES,makeTemplate};
 })();

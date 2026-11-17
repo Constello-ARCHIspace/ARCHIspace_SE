@@ -14,6 +14,7 @@ function migrateAccounts(PDO $db): void {
             if (!in_array($name, $columns, true)) $db->exec("ALTER TABLE users ADD COLUMN $name $definition");
         }
         $db->exec(file_get_contents(__DIR__ . '/admin-schema.sql'));
+        $db->exec(file_get_contents(__DIR__ . '/designs-schema.sql'));
         $db->exec('COMMIT');
     } catch (Throwable $e) { $db->exec('ROLLBACK'); throw $e; }
 }

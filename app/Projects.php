@@ -2,10 +2,13 @@
 declare(strict_types=1);
 final class ProjectSubmission {
     public function __construct(private PDO $db,private string $blueprintRoot) {}
-    public function submit(int $actor,string $name,string $kind,string $request,string $json): int {
+    private function fields(string &$name,string $kind,string &$request): void {
         $name=trim($name);$request=trim($request);
         if(mb_strlen($name)<1||mb_strlen($name)>100||mb_strlen($request)>2000)throw new InvalidArgumentException('Use a project name up to 100 characters and a request up to 2,000 characters.');
         if(!in_array($kind,['House','Commercial','Mixed use'],true))throw new InvalidArgumentException('Invalid building type.');
+    }
+    public function submit(int $actor,string $name,string $kind,string $request,string $json): int {
+        $this->fields($name,$kind,$request);
         $canonical=$this->canonicalSnapshot($actor,$json);
         $service=new AdminService($this->db);
         $this->db->exec('BEGIN IMMEDIATE');
@@ -16,6 +19,48 @@ final class ProjectSubmission {
             $this->db->prepare('INSERT INTO projects(public_id,owner_id,name,kind,owner_request,state_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)')->execute([bin2hex(random_bytes(16)),$actor,$name,$kind,$request,$canonical,time(),time()]);
             $id=(int)$this->db->lastInsertId();$service->audit($actor,'project_submitted','project',$id);
             $this->db->exec('COMMIT');return $id;
+        }catch(Throwable $e){$this->db->exec('ROLLBACK');throw $e;}
+    }
+    /**
+     * The owner may change or delete a submission only before review starts: no reviewer assigned and no
+     * feedback written (drafts included). After that the snapshot stays as submitted, so the review
+     * always matches what the reviewer saw; changes go in as a new submission.
+     */
+    public static function editableStatus(PDO $db,array $project): bool {
+        if($project['status']!=='unassigned'||$project['assigned_to']!==null)return false;
+        $q=$db->prepare('SELECT count(*) FROM feedback WHERE project_id=?');$q->execute([(int)$project['id']]);return (int)$q->fetchColumn()===0;
+    }
+    private function editable(int $actor,int $id,int $expected): array {
+        $q=$this->db->prepare('SELECT * FROM projects WHERE id=?');$q->execute([$id]);$p=$q->fetch(PDO::FETCH_ASSOC);
+        if(!$p||(int)$p['owner_id']!==$actor)throw new AccessDenied('Project unavailable.');
+        if((int)$p['version']!==$expected)throw new StaleChange('This submission changed since you opened it. Open it again and retry.');
+        if(!self::editableStatus($this->db,$p))throw new DomainException('A reviewer is already working on this submission, so it can no longer be changed or deleted. Submit your changes as a new submission instead.');
+        return $p;
+    }
+    /** Replace the snapshot, name, type and request of the owner's own submission before review starts. */
+    public function update(int $actor,int $id,int $expected,string $name,string $kind,string $request,string $json): void {
+        $this->fields($name,$kind,$request);
+        $canonical=$this->canonicalSnapshot($actor,$json);
+        $service=new AdminService($this->db);
+        $this->db->exec('BEGIN IMMEDIATE');
+        try{
+            $service->user($actor);$p=$this->editable($actor,$id,$expected);
+            $q=$this->db->prepare('SELECT COALESCE(sum(length(state_json)),0) FROM projects WHERE owner_id=?');$q->execute([$actor]);
+            if((int)$q->fetchColumn()-strlen($p['state_json'])+strlen($canonical)>64*1024*1024)throw new DomainException('Submission quota reached. Contact your administrator.');
+            $this->db->prepare('UPDATE projects SET name=?,kind=?,owner_request=?,state_json=?,version=version+1,updated_at=? WHERE id=?')->execute([$name,$kind,$request,$canonical,time(),$id]);
+            $service->audit($actor,'project_updated','project',$id);
+            $this->db->exec('COMMIT');
+        }catch(Throwable $e){$this->db->exec('ROLLBACK');throw $e;}
+    }
+    /** Delete the owner's own submission before review starts. */
+    public function withdraw(int $actor,int $id,int $expected): void {
+        $service=new AdminService($this->db);
+        $this->db->exec('BEGIN IMMEDIATE');
+        try{
+            $service->user($actor);$p=$this->editable($actor,$id,$expected);
+            $this->db->prepare('DELETE FROM projects WHERE id=?')->execute([$id]);
+            $service->audit($actor,'project_withdrawn','project',$id,['name'=>$p['name']]);
+            $this->db->exec('COMMIT');
         }catch(Throwable $e){$this->db->exec('ROLLBACK');throw $e;}
     }
     /** Validate an exported studio snapshot for this account and return the canonical JSON that is stored. */

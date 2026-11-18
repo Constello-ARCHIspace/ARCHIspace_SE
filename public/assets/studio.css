@@ -43,3 +43,7 @@ body.touring{overflow:hidden}
 .guide-tour span{color:var(--muted);font-size:12px;line-height:1.5}
 @media (prefers-reduced-motion:reduce){.tour-ring{transition:none}}
 @media print{.tour-shade,.tour-ring,.tour-card{display:none!important}}
+.review-target{margin:0 0 12px;padding:8px 12px 10px;border:1px solid var(--line);border-radius:6px}
+.review-target legend{padding:0 4px;color:var(--muted);font-size:12px}
+.review-target label{display:flex;gap:8px;align-items:center;margin:4px 0}
+.review-target[hidden]{display:none}

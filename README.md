@@ -88,7 +88,7 @@ Run `php tests/auth.php` for registration, hashing, verification gating, duplica
 
 Before release, also exercise HTTP flows: CSRF rejection, session ID rotation, expired sessions, POST-only logout, unauthenticated API rejection, cross-account blueprint denial, two-user browser project separation, and actual SMTP delivery. Check desktop/mobile views and keyboard navigation.
 
-Validation uses PHP 8.5.12 through WebAssembly because native PHP and Composer are unavailable here. Run `php tests/auth.php`, `php tests/admin.php` and `php tests/designs.php` with your native PHP installation. For HTTP checks, run `npm install` then `npm test` inside `tests/` (Node.js 24+). The harness uses isolated temporary databases and sends no email. See **VALIDATION.md** for exact results and remaining checks.
+Validation uses PHP 8.5.12 through WebAssembly because native PHP and Composer are unavailable here. Run `php tests/auth.php`, `php tests/admin.php`, `php tests/designs.php` and `php tests/submissions.php` with your native PHP installation. For HTTP checks, run `npm install` then `npm test` inside `tests/` (Node.js 24+). The harness uses isolated temporary databases and sends no email. See **VALIDATION.md** for exact results and remaining checks.
 
 ## References
 

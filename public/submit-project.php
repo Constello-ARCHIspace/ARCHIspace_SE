@@ -16,10 +16,18 @@ try{
         if($json===false)throw new RuntimeException('Upload unavailable.');
     }
     $submission=new ProjectSubmission($db,getenv('ARCHISPACE_BLUEPRINT_DIR')?:dirname(__DIR__).'/storage/blueprints');
-    $id=$submission->submit((int)$user['id'],textInput($_POST,'name'),textInput($_POST,'kind'),textInput($_POST,'request'),$json);
-    $_SESSION['portal_notice']='Design submitted. An Admin can now assign a reviewer.';
+    $replace=integerInput($_POST,'replace',0);
+    if($replace>0){
+        // Update an existing submission (owner only, before review starts; checked in ProjectSubmission).
+        $submission->update((int)$user['id'],$replace,integerInput($_POST,'version'),textInput($_POST,'name'),textInput($_POST,'kind'),textInput($_POST,'request'),$json);
+        $id=$replace;$_SESSION['portal_notice']='Submission updated. An Admin can now assign a reviewer.';
+    }else{
+        $id=$submission->submit((int)$user['id'],textInput($_POST,'name'),textInput($_POST,'kind'),textInput($_POST,'request'),$json);
+        $_SESSION['portal_notice']='Design submitted. An Admin can now assign a reviewer.';
+    }
     header('Location: project.php?id='.$id,true,303);exit;
-}catch(AccessDenied $e){http_response_code(403);$message='Account access changed. Sign in again.';}
+}catch(AccessDenied $e){http_response_code(403);$message='Account access changed or this submission is not yours. Sign in again.';}
+catch(StaleChange $e){http_response_code(409);$message=$e->getMessage();}
 catch(InvalidArgumentException|DomainException $e){http_response_code(422);$message=$e->getMessage();}
 catch(Throwable $e){http_response_code(503);error_log('ARCHIspace submission failed: '.get_class($e));$message='Submission service unavailable. Please try again.';}
 portalHeader('Submission not saved',$user);echo '<section class="panel"><h1>Submission not saved.</h1><p>'.esc($message).'</p><p>Your studio design is unchanged. Return to the studio to retry, or select the file again on My submissions.</p><a class="button" href="projects.php">My submissions</a> <a class="button" href="index.php">Design studio</a></section>';portalFooter();

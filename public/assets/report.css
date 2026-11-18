@@ -1,0 +1,50 @@
+/* Readiness report preview (on screen) and the printed page. */
+#printReport{position:fixed;inset:0;z-index:1000;overflow:auto;background:rgba(9,13,18,.92)}
+#printReport[hidden]{display:none}
+body.rp-open{overflow:hidden}
+.rp-bar{position:sticky;top:0;z-index:1;display:flex;gap:8px;align-items:center;justify-content:flex-end;padding:10px 16px;background:#10151c;border-bottom:1px solid #2f3b4e}
+.rp-bar span{margin-right:auto;color:#8592a6}
+.rp-page{width:min(210mm,100% - 24px);margin:20px auto 40px;padding:16mm 15mm;background:#fff;color:#1f2933;font:10.5pt/1.45 Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;box-shadow:0 10px 40px rgba(0,0,0,.45)}
+.rp-page h1{margin:2px 0 4px;font-size:20pt;line-height:1.15}
+.rp-page h2{margin:18px 0 8px;padding-bottom:4px;border-bottom:1.5px solid #3d6652;color:#24372f;font-size:13pt;break-after:avoid}
+.rp-page p{margin:0 0 6px}
+.rp-page table{border-collapse:collapse;width:100%}
+.rp-page .help,.rp-muted{color:#5b6675;font-size:9pt}
+.rp-kicker{margin:0;color:#3d6652;font-size:9pt;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.rp-head{display:flex;gap:16px;align-items:flex-start;justify-content:space-between}
+.rp-score{flex:none;min-width:34mm;padding:8px 12px;border:2px solid #3d6652;border-radius:8px;text-align:center;color:#24372f}
+.rp-score b{font-size:26pt;line-height:1}
+.rp-score span{font-size:12pt}
+.rp-score small{display:block;margin-top:2px;color:#5b6675;font-size:8pt}
+.rp-note{margin:12px 0 0!important;padding:7px 10px;border-left:3px solid #c48a1b;background:#fdf6e7;font-size:9pt}
+.rp-facts th,.rp-facts td{padding:4px 6px;border-bottom:1px solid #e3e7ec;text-align:left;vertical-align:top}
+.rp-facts th{width:38%;color:#5b6675;font-weight:600}
+.rp-areas{margin:6px 0}
+.rp-areas th,.rp-areas td{padding:5px 6px;border:1px solid #d5dbe2;text-align:center}
+.rp-areas th{background:#f2f5f3;font-weight:600}
+.rp-areas td{font-size:13pt;font-weight:600}
+.rp-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:10px;align-items:start}
+.rp-page figure{margin:0 0 10px;break-inside:avoid}
+.rp-page figure img{display:block;width:100%;height:auto;border:1px solid #d5dbe2;border-radius:4px}
+.rp-page figcaption{margin-top:3px;color:#5b6675;font-size:8.5pt}
+.rp-plan img{max-height:150mm;object-fit:contain;background:#f0f2e9}
+.rp-rings .hz{font-size:9.5pt}
+.rp-rings .hz th,.rp-rings .hz td{padding:4px;border-bottom:1px solid #e3e7ec;text-align:center}
+.rp-rings .hz th:first-child{text-align:left}
+.rp-rings .hz .l0{color:#6b7684}
+.rp-rings .hz .l1{color:#2f6f4f}
+.rp-rings .hz .l2{color:#a86a00}
+.rp-rings .hz .l3{color:#b42318}
+.rp-rings .hz .l3 b::after{content:" ▲"}
+.rp-findings details>summary{font-weight:600;list-style:none}
+.rp-findings p b{color:#24372f}
+.rp-foot{margin-top:18px;padding-top:8px;border-top:1px solid #d5dbe2;color:#5b6675;font-size:8.5pt}
+@page{size:A4;margin:14mm 13mm}
+@media print{
+ html:has(body.rp-open),body.rp-open{height:auto!important;overflow:visible!important;background:#fff!important}
+ body.rp-open>*:not(#printReport){display:none!important}
+ #printReport{position:static;overflow:visible;background:#fff}
+ .rp-bar{display:none}
+ .rp-page{width:auto;margin:0;padding:0;box-shadow:none}
+ .rp-findings{break-before:page}
+}

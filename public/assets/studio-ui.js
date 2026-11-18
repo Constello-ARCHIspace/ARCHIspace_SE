@@ -31,7 +31,7 @@ const TOUR=[
  {sel:'#roomPalette',tab:'build',title:'Add rooms',text:'Click a room to add it to the floor you are editing, then drag it into place. Furniture and fixtures are listed below.'},
  {sel:'.floor-actions',tab:'build',title:'Floors',text:'Add an empty floor or copy the current one. Use stairs to connect floors: the readiness check counts the ways down from every upper floor.'},
  {sel:'.toolbar .seg',title:'3D, 2D plan and Top',text:'Switch views here. Move and resize rooms in the 2D plan, and check the shape and roof in 3D.'},
- {sel:'#lotMap',tab:'site',title:'Place your lot',text:'In Site, click the map to put the lot pin where the lot is, then turn the lot until it lines up with the street.'},
+ {sel:'#lmSearch',tab:'site',title:'Place your lot',text:'In Site, search for the address or click the map to put the lot pin where the lot is, then turn the lot until it lines up with the street.'},
  {sel:'#fetchHazard',tab:'site',title:'Check hazards',text:'Check location looks up Project NOAH flood, landslide and storm-surge levels at the pin and within 500 m.'},
  {sel:'#readinessBtn',tab:'env',title:'Readiness and simulation',text:'In Environment, run the readiness report and the simulation. Mapped hazards at the lot lower the score.'},
  {sel:'#saveBtn',title:'Save and open',text:'Save keeps the design in your account (Ctrl+S). Open lists your saved designs and their versions.'},

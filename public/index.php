@@ -288,6 +288,8 @@ canvas#plan2d{display:none;cursor:default}
       <p class="help" style="margin-top:8px">Upload house or lot blueprints to overlay on the floor plan. Adjust opacity and scale to trace your design.</p>
     </div>
     <div class="sect"><div class="stitle">Hazard Data · Location</div>
+      <form class="lm-search" id="lmSearch" role="search" novalidate><label for="lmQuery">Find the lot by address</label><div class="row"><input id="lmQuery" type="search" maxlength="200" placeholder="Street, barangay, landmark or city" autocomplete="off" spellcheck="false"><button type="submit" id="lmSearchBtn">Search</button></div></form>
+      <div id="lmResultsBox" hidden><ul id="lmResults" class="lm-results" aria-label="Places found"></ul><p class="help">Search by OpenStreetMap Nominatim · © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors</p></div>
       <div class="row lm-bar"><button id="useLocation" type="button">Use my location</button><a id="openInMap" class="lm-link" target="_blank" rel="noopener" hidden>Open in map</a></div>
       <div id="locStatus" class="help" role="status">Use this when you are standing on the lot, or click the map to place the pin.</div>
       <div class="lotmap" id="lotMap" tabindex="0" role="application" aria-label="Lot map. Drag to move the map, click to place the lot pin, plus and minus keys to zoom.">
@@ -1855,6 +1857,24 @@ function lmInit(){const box=$('lotMap');const la=Number($('siteLat').value),lo=N
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&box.classList.contains('big'))lmSetBig(false)});lmSyncBearing();
  for(const id of['siteLat','siteLng'])$(id).addEventListener('input',()=>lmFromInputs(true));
  LM.ready=true;lmRender()}
+/* Address search (geocode.php → OpenStreetMap Nominatim). Runs only when the user presses Search, as Nominatim asks. */
+let lmSearching=false;
+$('lmSearch').onsubmit=async e=>{e.preventDefault();const q=$('lmQuery').value.trim(),box=$('lmResultsBox'),list=$('lmResults');
+ if(q.length<3){lmStatus('Type at least 3 characters, for example a street, barangay or landmark.',true);return}
+ if(lmSearching)return;lmSearching=true;$('lmSearchBtn').disabled=true;lmStatus('Searching…');
+ try{const c=LM.pin||lmUnproj(LM.cx,LM.cy,LM.z),r=await fetch('geocode.php?q='+encodeURIComponent(q)+'&near='+c[0].toFixed(4)+','+c[1].toFixed(4)),d=await r.json().catch(()=>({}));
+  if(!r.ok)throw Error(d.error||'Address search failed.');
+  list.replaceChildren();
+  if(!d.results.length){box.hidden=true;lmStatus('No places found. Try fewer words, add the city (for example “Tetuan, Zamboanga City”), or click the map.',true);return}
+  for(const p of d.results){const li=document.createElement('li'),b=document.createElement('button');b.type='button';b.textContent=p.name;b.onclick=()=>lmPickPlace(p);li.append(b);list.append(li)}
+  box.hidden=false;lmStatus(d.results.length===1?'1 place found. Choose it to move the pin.':d.results.length+' places found. Choose one to move the pin.');list.querySelector('button').focus()}
+ catch(err){box.hidden=true;lmStatus(err.message||'Address search failed.',true)}
+ finally{lmSearching=false;$('lmSearchBtn').disabled=false}};
+function lmPickPlace(p){
+ // Zoom so the whole place fits (a barangay or a street), but at least close enough to see lots.
+ let z=18;if(p.bbox){const[s,n,w,e]=p.bbox,mpp=156543.03392*Math.cos(p.lat*Math.PI/180),span=Math.max((n-s)*111320,(e-w)*111320*Math.cos(p.lat*Math.PI/180),1),W=$('lotMap').clientWidth||300;z=Math.max(13,Math.min(18,Math.floor(Math.log2(W*mpp/span))))}
+ LM.z=z;lmSetPin(p.lat,p.lng,{center:true});$('lmResultsBox').hidden=true;
+ lmStatus('Pin placed at “'+p.name.split(',').slice(0,3).join(',')+'”. An address search finds the street or area, not your exact lot: drag the pin onto the middle of your lot, then click Check location.',true);$('lotMap').focus()}
 $('useLocation').onclick=()=>{if(!navigator.geolocation)return lmStatus('This browser cannot share its location. Click the map to place the pin.',true);if(!window.isSecureContext)return lmStatus('Location only works on a secure (HTTPS) page. Click the map to place the pin instead.',true);
  lmStatus('Asking for your location…');$('useLocation').disabled=true;
  navigator.geolocation.getCurrentPosition(p=>{$('useLocation').disabled=false;const{latitude:la,longitude:lo,accuracy:a}=p.coords;LM.z=Math.max(LM.z,a>200?15:17);lmSetPin(la,lo,{acc:a,center:true});const m=Math.round(a);lmStatus(a>50?`Located within about ±${m} m (the shaded circle). That is less precise than a lot, so drag the pin onto your lot, then click Check location.`:`Located within about ±${m} m. Drag the pin if it is not on your lot, then click Check location.`,a>50)},

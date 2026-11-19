@@ -1,5 +1,7 @@
 'use strict';
 document.querySelectorAll('[data-open]').forEach(button=>button.addEventListener('click',()=>document.getElementById(button.dataset.open)?.showModal()));
+// Forms that ask before doing something that cannot be undone.
+document.querySelectorAll('form[data-confirm]').forEach(form=>form.addEventListener('submit',e=>{if(!confirm(form.dataset.confirm))e.preventDefault()}));
 document.querySelectorAll('[data-close]').forEach(button=>button.addEventListener('click',()=>document.getElementById(button.dataset.close)?.close()));
 // Draw the submitted geometry; all labels are canvas text, never executable HTML.
 function drawPlan(canvas){

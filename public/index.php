@@ -14,6 +14,15 @@ $currentUser = requireUser();
 if (empty($_SESSION['csrf'])) $_SESSION['csrf'] = bin2hex(random_bytes(24));
 $appTitle = 'ARCHIspace — Concept by aqua lucero';
 $defaultProjectName = 'Untitled house';
+// Opened from a submission page (index.php?submission=ID): the studio loads that snapshot for its owner.
+$fromSubmission = null;
+$sid = $_GET['submission'] ?? null;
+if (is_string($sid) && preg_match('/^[0-9]{1,10}$/D', $sid)) {
+    require_once dirname(__DIR__) . '/app/Projects.php';
+    $q = $db->prepare('SELECT id,name,kind,owner_request,status,assigned_to,version FROM projects WHERE id=? AND owner_id=?');
+    $q->execute([(int)$sid, (int)$currentUser['id']]);
+    if ($row = $q->fetch(PDO::FETCH_ASSOC)) $fromSubmission = ['id' => (int)$row['id'], 'name' => $row['name'], 'kind' => $row['kind'], 'request' => $row['owner_request'], 'version' => (int)$row['version'], 'editable' => ProjectSubmission::editableStatus($db, $row)];
+}
 function htmlEscape(string $value): string
 {
     return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -449,7 +458,7 @@ canvas#plan2d{display:none;cursor:default}
 <div id="designsList" class="designs-list"></div>
 <p class="designs-note">Designs are private to your account until you submit one for review. Every save keeps a version; the newest 20 versions of each design are kept, and you can keep up to 50 designs.</p>
 </dialog>
-<dialog id="reviewSubmissionDialog"><div class="guide-heading"><h2>Submit for human review</h2><button type="button" id="closeReviewSubmission" aria-label="Close review form">×</button></div><form action="submit-project.php" method="post" id="reviewSubmissionForm"><input type="hidden" name="csrf" value="<?= esc($_SESSION['csrf']) ?>"><input type="hidden" name="snapshot" id="reviewSnapshot"><label>Project name<input id="reviewName" name="name" maxlength="100" required></label><label>Building type<select name="kind"><option>House</option><option>Commercial</option><option>Mixed use</option></select></label><label>Review request<textarea name="request" maxlength="2000" rows="4" placeholder="What would you like your reviewer to focus on?"></textarea></label><p>This shares a saved snapshot and its blueprint images with Admins and your assigned reviewer. Later changes remain in your studio until you submit again.</p><p id="reviewSubmissionStatus" role="status"></p><button class="primary" id="confirmReviewSubmission">Submit for review</button></form></dialog>
+<dialog id="reviewSubmissionDialog"><div class="guide-heading"><h2>Submit for human review</h2><button type="button" id="closeReviewSubmission" aria-label="Close review form">×</button></div><form action="submit-project.php" method="post" id="reviewSubmissionForm"><input type="hidden" name="csrf" value="<?= esc($_SESSION['csrf']) ?>"><input type="hidden" name="snapshot" id="reviewSnapshot"><input type="hidden" name="replace" id="reviewReplace" value="0"><input type="hidden" name="version" id="reviewVersion" value="0"><fieldset id="reviewTargetBox" class="review-target" hidden><legend>This design was opened from a submission</legend><label><input type="radio" name="reviewMode" value="update" checked> Update “<span id="reviewTargetName"></span>” (no reviewer yet)</label><label><input type="radio" name="reviewMode" value="new"> Submit as a new submission</label></fieldset><label>Project name<input id="reviewName" name="name" maxlength="100" required></label><label>Building type<select name="kind"><option>House</option><option>Commercial</option><option>Mixed use</option></select></label><label>Review request<textarea name="request" maxlength="2000" rows="4" placeholder="What would you like your reviewer to focus on?"></textarea></label><p>This shares a saved snapshot and its blueprint images with Admins and your assigned reviewer. Later changes remain in your studio until you submit again.</p><p id="reviewSubmissionStatus" role="status"></p><button class="primary" id="confirmReviewSubmission">Submit for review</button></form></dialog>
 <script>
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
@@ -459,6 +468,7 @@ const sm=t=>t*t*(3-2*t);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const r1=n=>Math.round(n*100)/100;
 const projectStorageKey = <?= json_encode('archispace-v3-user-' . $currentUser['public_id']) ?>;
+const FROM_SUBMISSION = <?= json_encode($fromSubmission, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 const csrf = <?= json_encode($_SESSION['csrf']) ?>;
 const T=.15, FLOOR=.14;
 const hx=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
@@ -1083,8 +1093,12 @@ function normalize(d){
  s.blueprints=(d.blueprints||[]).map(bp=>({...bp,id:bp.id||s.nextBpId++,name:bp.name||'Blueprint',type:bp.type==='lot'?'lot':'house',data:typeof bp.data==='string'&&(/^(data:image\/|blueprint\.php\?id=[a-f0-9]{48}$)/.test(bp.data))?bp.data:'',opacity:bp.opacity??50,scale:bp.scale??1,offsetX:bp.offsetX??0,offsetZ:bp.offsetZ??0,rotation:bp.rotation??0,visible:bp.visible!==false,w:bp.w||0,h:bp.h||0,level:bp.type==='lot'?0:lvl(bp)}));
  s.nextBpId=Math.max(s.nextBpId||1,...s.blueprints.map(b=>b.id+1));
  return s}
-function loadState(d){try{S=normalize(d);if(!openingCloud){cloud=null;storeCloud()}bpImages.clear();comparisonSuggestion=null;comparisonBlueprint=null;$('compareMode').value='off';sel=null;clampRooms();syncUI();rebuild();fitCamera(view==='top');fit2D();renderPanels();commit();return true}catch(e){toast('Could not load project: '+e.message);return false}}
-$('submitReviewBtn').onclick=()=>{$('reviewMenu').open=false;$('reviewSubmissionForm').elements.kind.value=S.site.kind||'House';$('reviewName').value=S.name||'Untitled project';$('reviewSubmissionStatus').textContent='';$('reviewSubmissionDialog').showModal()};
+let reviewTarget=null;// the submission this design was opened from, while its owner can still update it
+function loadState(d){reviewTarget=null;try{S=normalize(d);if(!openingCloud){cloud=null;storeCloud()}bpImages.clear();comparisonSuggestion=null;comparisonBlueprint=null;$('compareMode').value='off';sel=null;clampRooms();syncUI();rebuild();fitCamera(view==='top');fit2D();renderPanels();commit();return true}catch(e){toast('Could not load project: '+e.message);return false}}
+$('submitReviewBtn').onclick=()=>{$('reviewMenu').open=false;const f=$('reviewSubmissionForm');f.elements.kind.value=S.site.kind||'House';$('reviewName').value=S.name||'Untitled project';$('reviewSubmissionStatus').textContent='';
+ $('reviewTargetBox').hidden=!reviewTarget;if(reviewTarget){$('reviewTargetName').textContent=reviewTarget.name;f.elements.reviewMode.value='update';$('reviewName').value=reviewTarget.name;f.elements.request.value=reviewTarget.request||''}reviewModeSync();$('reviewSubmissionDialog').showModal()};
+function reviewModeSync(){const up=!!reviewTarget&&$('reviewSubmissionForm').elements.reviewMode.value==='update';$('reviewReplace').value=up?reviewTarget.id:0;$('reviewVersion').value=up?reviewTarget.version:0;$('confirmReviewSubmission').textContent=up?'Update submission':'Submit for review'}
+for(const r of document.querySelectorAll('input[name=reviewMode]'))r.onchange=reviewModeSync;
 $('closeReviewSubmission').onclick=()=>$('reviewSubmissionDialog').close();
 $('reviewSubmissionForm').onsubmit=async e=>{
  e.preventDefault();const button=$('confirmReviewSubmission');button.disabled=true;$('reviewSubmissionStatus').textContent='Saving blueprint images and preparing your snapshot…';
@@ -2049,6 +2063,15 @@ let loaded=false;try{const raw=localStorage.getItem(projectStorageKey);if(raw){S
 if(!loaded)S=makeTemplate(TEMPLATES[0].def);
 if(!loaded)setTimeout(()=>{if(!cloud)pristineHash=hashText(cloudSnapshot())},0);
 syncUI();init3D();setView('3d');renderPanels();commit();
+if(FROM_SUBMISSION)setTimeout(openSubmission,0);// after the starter design is marked untouched
+async function openSubmission(){
+ history.replaceState(null,'',location.pathname);// a reload should not open it again
+ if(!okToReplace())return;
+ try{const r=await fetch('project-download.php?id='+FROM_SUBMISSION.id,{credentials:'same-origin'});if(!r.ok)throw Error('HTTP '+r.status);
+  if(!loadState(await r.json()))return;
+  reviewTarget=FROM_SUBMISSION.editable?FROM_SUBMISSION:null;
+  toast('Opened submission “'+FROM_SUBMISSION.name+'”. '+(reviewTarget?'To change it, edit and choose Review → Submit for review.':'A reviewer has it, so changes go in as a new submission.'))}
+ catch(e){toast('Could not open that submission')}}
 window.__archi={get S(){return S},select,rebuild,addRoom,addObject,setView,loadState,TEMPLATES,makeTemplate};
 })();
 </script>

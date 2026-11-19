@@ -5,3 +5,5 @@
 [hidden],input[type="hidden"],dialog:not([open]){display:none!important}.portal-nav nav a{white-space:nowrap}.nav-account form{flex-shrink:0}
 
 details:not([open])>:not(summary){display:none!important}.search-row label{min-width:0}.nav-account{flex-shrink:0}#review>.review-grid{margin-bottom:24px}
+
+.owner-actions .owner-buttons{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}.owner-actions form{margin:0}.owner-actions button.danger{border:1px solid #c9a39e;background:#fff;color:#a94c43}.owner-actions button.danger:hover{background:#fbefed}

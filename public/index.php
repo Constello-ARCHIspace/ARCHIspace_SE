@@ -223,7 +223,7 @@ canvas#plan2d{display:none;cursor:default}
 .hz .l3{color:var(--danger)}
 .hz .l3 b::after{content:" ▲"}
 </style>
-<link rel="stylesheet" href="assets/studio.css"><script src="assets/studio-ui.js" defer></script>
+<link rel="stylesheet" href="assets/studio.css"><script src="assets/studio-ui.js" defer></script><link rel="stylesheet" href="assets/report.css">
 </head>
 <body>
 <div class="shell">
@@ -240,7 +240,7 @@ canvas#plan2d{display:none;cursor:default}
   <button id="saveBtn">Save</button>
   <details class="menu" id="reviewMenu"><summary>Review ▾</summary><div class="menu-list"><button id="submitReviewBtn">Submit for review</button><a href="projects.php">My submissions</a><?php if ($currentUser['role'] !== 'user'): ?><a href="<?= esc(accountHome($currentUser)) ?>">Staff dashboard</a><?php endif; ?></div></details>
   <form action="logout.php" method="post"><input type="hidden" name="csrf" value="<?= esc($_SESSION['csrf']) ?>"><button type="submit" title="<?= esc($currentUser['email']) ?>">Sign out</button></form>
-  <details class="menu" id="exportMenu"><summary class="primary" style="background:var(--accent);color:white;font-weight:500;border-color:var(--accent)">Export ▾</summary><div class="menu-list"><button id="exportJson">Project file (.json)</button><button id="exportPng">Current view (.png)</button></div></details>
+  <details class="menu" id="exportMenu"><summary class="primary" style="background:var(--accent);color:white;font-weight:500;border-color:var(--accent)">Export ▾</summary><div class="menu-list"><button id="exportJson">Project file (.json)</button><button id="exportPng">Current view (.png)</button><button id="exportReport">Readiness report (print / PDF)</button></div></details>
   <input type="file" id="loadFile" accept=".json,application/json" hidden>
 </header>
 <nav class="workflow" aria-label="Planning steps"><span class="workflow-label">RESIDENTIAL / CONCEPT PLAN</span><button data-step="blueprint"><span>01</span>Import blueprint</button><button data-step="design" class="active" aria-current="step"><span>02</span>Design site</button><button data-step="simulate"><span>03</span>Simulate</button><button data-step="readiness"><span>04</span>Review readiness</button><button class="quick-guide" id="quickGuide"><img src="assets/figma/studio-imgCircleHelp.svg" alt="">Quick guide</button></nav>
@@ -1943,6 +1943,105 @@ lmInit();gmSync();
 document.addEventListener('change',()=>renderReadiness());
 
 initBpUI();
+
+/* Readiness report: one printable page with the project summary, pictures of the 3D model, the lot map and
+   every floor plan, the readiness score and the full findings. Opens as a preview over the studio; Print or
+   "Save as PDF" in the browser's print dialog produces the file. Uses the studio's own state and functions. */
+{
+const PIC_Q=.9;// JPEG quality for pictures in the report
+
+function rpPicture(canvas,maxW){
+ // Copies a canvas to a JPEG no wider than maxW, on a white background.
+ const k=Math.min(1,maxW/canvas.width),c=document.createElement('canvas');c.width=Math.round(canvas.width*k);c.height=Math.round(canvas.height*k);
+ const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(canvas,0,0,c.width,c.height);return c.toDataURL('image/jpeg',PIC_Q)}
+function rpBlank(canvas){
+ // True when a canvas is one flat colour (for example a 3D view the browser could not read back).
+ try{const c=document.createElement('canvas');c.width=c.height=48;const x=c.getContext('2d');x.drawImage(canvas,0,0,48,48);const d=x.getImageData(0,0,48,48).data;
+  for(let i=4;i<d.length;i+=4)if(Math.abs(d[i]-d[0])+Math.abs(d[i+1]-d[1])+Math.abs(d[i+2]-d[2])+Math.abs(d[i+3]-d[3])>6)return false;return true}catch(e){return true}}
+
+function rp3D(){
+ if(!scene||!renderer||!camera)return null;
+ try{renderer.render(scene,camera);return rpBlank(cv3)?null:rpPicture(cv3,1400)}catch(e){console.warn('Report 3D picture:',e);return null}}
+
+function rpPlans(){
+ // Draws each floor zoomed to the building (same scale on every floor), without the selection, then puts everything back.
+ const keep={view,floor:curFloor,sel,pv:{...pv}},out=[];
+ try{view='2d';sel=null;fit2D();
+  if(S.rooms.length){const M=2,x0=Math.min(...S.rooms.map(r=>r.x-r.w/2))-M,x1=Math.max(...S.rooms.map(r=>r.x+r.w/2))+M,z0=Math.min(...S.rooms.map(r=>r.z-r.d/2))-M,z1=Math.max(...S.rooms.map(r=>r.z+r.d/2))+M,W=wrap.clientWidth,H=wrap.clientHeight;
+   pv.s=Math.max(pv.s,Math.min((W-60)/(x1-x0),(H-60)/(z1-z0)));pv.ox=W/2-(x0+x1)/2*pv.s;pv.oy=H/2-(z0+z1)/2*pv.s}
+  for(let F=0;F<S.floors.length;F++){curFloor=F;draw2D();out.push({name:floorName(F),src:rpPicture(plan,1400),rooms:S.rooms.filter(r=>lvl(r)===F)})}}
+ catch(e){console.warn('Report floor plans:',e)}
+ finally{view=keep.view;curFloor=keep.floor;sel=keep.sel;Object.assign(pv,keep.pv);if(view==='2d')draw2D()}
+ return out}
+
+function rpMap(){
+ // The street map around the pin (already loaded for the map ground), with the 100 m and 250 m circles.
+ if(typeof GM==='undefined'||!GM||!GM.key||!LM.pin)return null;
+ const[la,lo]=LM.pin;if(GM.key!==la.toFixed(5)+','+lo.toFixed(5))return null;
+ // Skip the map when no street tiles have loaded (offline or tile server down): the centre would still be blank.
+ {const d=GM.ctx.getImageData(GM_N/2-128,GM_N/2-128,256,256).data;let seen=false;for(let i=0;i<d.length;i+=64)if(d[i]!==0xdf||d[i+1]!==0xe3||d[i+2]!==0xdc){seen=true;break}if(!seen)return null}
+ try{const side=Math.min(GM_N,Math.round(2*300/GM.mpp)),c=document.createElement('canvas');c.width=c.height=side;const x=c.getContext('2d'),h=side/2;
+  x.drawImage(GM.out,(GM_N-side)/2,(GM_N-side)/2,side,side,0,0,side,side);
+  x.lineWidth=Math.max(2,side/300);x.setLineDash([side/60,side/90]);x.font='600 '+Math.round(side/38)+'px Inter,system-ui,sans-serif';x.textAlign='center';
+  for(const m of [100,250]){const r=m/GM.mpp;if(r>h)continue;x.strokeStyle='rgba(17,24,39,.85)';x.beginPath();x.arc(h,h,r,0,7);x.stroke();x.fillStyle='rgba(17,24,39,.9)';x.fillText(m+' m',h,h-r-side/120)}
+  x.setLineDash([]);x.fillStyle='#b91c1c';x.strokeStyle='#fff';x.lineWidth=side/250;x.beginPath();x.arc(h,h,side/90,0,7);x.fill();x.stroke();
+  return{src:rpPicture(c,900),metres:Math.round(side*GM.mpp)}}
+ catch(e){console.warn('Report map:',e);return null}}
+
+function rpRow(k,v){return `<tr><th scope="row">${esc(k)}</th><td>${v}</td></tr>`}
+
+function rpBuild(){
+ // Run the same assessment the Readiness Report button shows, so the page and the panel agree.
+ renderReadiness();
+ const a=assessReadiness(),findings=document.createElement('div');findings.innerHTML=$('readinessReport').innerHTML;
+ findings.querySelectorAll('details').forEach(d=>d.open=true);
+ const rings=$('hazardRings').innerHTML,pic3=rp3D(),plans=rpPlans(),map=rpMap();
+ const area=S.rooms.reduce((s,r)=>s+r.w*r.d,0),foot=S.rooms.filter(r=>lvl(r)===0).reduce((s,r)=>s+r.w*r.d,0);
+ const use=S.site.kind==='House'?'House · '+(S.site.style||'Bungalow'):S.site.kind==='Commercial'?'Commercial · '+(S.site.category||'Office'):'Mixed use';
+ const loc=S.location||(LM.pin?{lat:LM.pin[0],lng:LM.pin[1]}:null);
+ const when=new Date().toLocaleString(undefined,{year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});
+ const scoreNote=a.site.risk===null?'Site hazards are not in this score: the lot location was not checked against Project NOAH.':`Design score ${a.designScore} × site factor ${a.siteFactor.toFixed(2)} = ${a.score}.`;
+ const fig=(src,cap,cls='')=>`<figure class="${cls}"><img src="${src}" alt="${esc(cap)}"><figcaption>${esc(cap)}</figcaption></figure>`;
+ return `<header class="rp-head"><div><p class="rp-kicker">Archispace · Design readiness report</p><h1>${esc(S.name||'Untitled project')}</h1><p class="rp-muted">Generated ${esc(when)}</p></div>
+ <div class="rp-score"><b>${a.score}</b><span>/100</span><small>${a.hazardKnown}/3 NOAH layers checked</small></div></header>
+ <p class="rp-note">Concept screening only. This report does not replace an engineer’s assessment, a building permit review, or National Building Code and Fire Code compliance checks.</p>
+ <section><h2>Project summary</h2><table class="rp-facts"><tbody>
+ ${rpRow('Building use',esc(use))}${rpRow('Structure',esc(S.site.structure||STRUCTURES[0]))}
+ ${rpRow('Storeys',S.floors.length)}${rpRow('Rooms',S.rooms.length)}
+ ${rpRow('Total floor area',area.toFixed(1)+' m²')}${rpRow('Ground floor footprint',foot.toFixed(1)+' m² ('+(foot/(S.site.width*S.site.depth)*100).toFixed(1)+'% of the lot)')}
+ ${rpRow('Lot size',S.site.width+' × '+S.site.depth+' m')}${rpRow('Wall height · roof',S.site.wall+' m · '+esc(S.site.roof))}
+ ${rpRow('Lot location',loc?loc.lat.toFixed(6)+', '+loc.lng.toFixed(6):'Not set')}
+ ${rpRow('Hazard scenario',S.location?'Flood '+S.location.period+'-year return period · storm surge scenario '+S.location.surge:'Not checked')}
+ </tbody></table></section>
+ <section><h2>Readiness score</h2><p><b>${a.score}/100.</b> ${esc(scoreNote)}</p>
+ <table class="rp-areas"><thead><tr><th scope="col">Terrain</th><th scope="col">Structure</th><th scope="col">Floor plan</th><th scope="col">Site hazards</th></tr></thead>
+ <tbody><tr><td>${100-a.terrainRisk}</td><td>${100-a.structureRisk}</td><td>${100-a.planRisk}</td><td>${a.site.risk===null?'not checked':100-a.site.risk}</td></tr></tbody></table>
+ <p class="rp-muted">Higher scores mean fewer flagged features. Heuristic score, not a probability or a safety certification.</p></section>
+ ${pic3||map?`<section class="rp-pics"><h2>Model and location</h2><div class="rp-grid">${pic3?fig(pic3,'3D model'):''}${map?fig(map.src,'Lot location: the red dot is the lot pin; dashed circles are 100 m and 250 m (map about '+map.metres+' m across, north up). © OpenStreetMap contributors'):''}</div></section>`:''}
+ ${rings?`<section><h2>Site hazards around the lot (Project NOAH)</h2><div class="rp-rings">${rings}</div></section>`:''}
+ <section class="rp-plans"><h2>Floor plans</h2>${plans.length?plans.map(p=>fig(p.src,p.name+' · '+p.rooms.length+' room'+(p.rooms.length===1?'':'s')+(p.rooms.length?': '+p.rooms.map(r=>r.name+' '+(r.w*r.d).toFixed(1)+' m²').join(', '):''),'rp-plan')).join(''):'<p>Floor plans could not be drawn.</p>'}</section>
+ <section class="rp-findings"><h2>Findings and recommendations</h2>${findings.innerHTML}</section>
+ <footer class="rp-foot"><p>Hazard data: Project NOAH (UP NOAH Center) and contributors. Map data © OpenStreetMap contributors. Terrain heights © DLR e.V. and Airbus Defence and Space, provided under COPERNICUS by the European Union and ESA. Earthquake data (PHIVOLCS) is not connected; earthquake ratings assess design features only.</p><p>No mapped hazard is not a guarantee of low risk. Generated by Archispace.</p></footer>`}
+
+let rpBox=null,lastFocus=null,oldTitle='';
+function rpCloseReport(){if(!rpBox)return;rpBox.hidden=true;rpBox.querySelector('.rp-page').innerHTML='';document.body.classList.remove('rp-open');if(lastFocus)lastFocus.focus()}
+function rpOpenReport(){
+ if(!S.rooms.length){toast('Add rooms before making a readiness report');return}
+ if(!rpBox){rpBox=document.createElement('div');rpBox.id='printReport';rpBox.hidden=true;rpBox.setAttribute('role','dialog');rpBox.setAttribute('aria-modal','true');rpBox.setAttribute('aria-label','Readiness report preview');
+  rpBox.innerHTML='<div class="rp-bar"><span>Readiness report preview</span><button type="button" class="primary" id="rpPrint">Print / Save as PDF</button><button type="button" id="rpClose">Close</button></div><article class="rp-page"></article>';
+  document.body.appendChild(rpBox);
+  $('rpClose').onclick=rpCloseReport;
+  $('rpPrint').onclick=()=>{oldTitle=document.title;document.title=((S.name||'Archispace').replace(/[^\w -]+/g,'').trim()||'Archispace')+' readiness report';window.print()};
+  addEventListener('afterprint',()=>{if(oldTitle){document.title=oldTitle;oldTitle=''}});
+  // While the preview is open, keys stay in it: Escape closes it and studio shortcuts (Delete, arrows) are not run.
+  document.addEventListener('keydown',e=>{if(rpBox.hidden)return;if(e.key==='Escape'){e.preventDefault();rpCloseReport()}e.stopPropagation()},true)}
+ lastFocus=document.activeElement;
+ try{rpBox.querySelector('.rp-page').innerHTML=rpBuild()}catch(e){console.error(e);toast('Could not make the report');return}
+ rpBox.hidden=false;rpBox.scrollTop=0;document.body.classList.add('rp-open');$('rpPrint').focus()}
+
+const rpBtn=document.getElementById('exportReport');
+if(rpBtn)rpBtn.onclick=()=>{$('exportMenu').open=false;rpOpenReport()};
+}
 
 /* ---------- boot ---------- */
 buildPalettes();

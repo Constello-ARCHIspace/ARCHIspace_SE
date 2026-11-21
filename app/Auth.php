@@ -26,18 +26,29 @@ final class Auth
         if ($count > $maximum) throw new DomainException('Too many attempts. Please try again later.');
     }
 
-    public function register(string $name, string $email, string $password): void
+    private static function namePart(string $value, string $label, bool $required): string
     {
-        $name = trim($name);
+        $normalized = preg_replace('/\s+/u', ' ', $value);
+        if ($normalized === null || str_contains($normalized, "\0")) throw new InvalidArgumentException("Enter a valid $label.");
+        $value = trim($normalized);
+        if ($required && $value === '') throw new InvalidArgumentException("Enter your $label.");
+        if (mb_strlen($value) > 80) throw new InvalidArgumentException("Use up to 80 characters for your $label.");
+        return $value;
+    }
+
+    public function register(string $firstName, string $lastName, string $email, string $password, ?string $middleName = null): void
+    {
+        $firstName = self::namePart($firstName, 'first name', true);
+        $lastName = self::namePart($lastName, 'last name', true);
+        $middleName = self::namePart($middleName ?? '', 'middle name', false);
         $email = self::email($email);
-        if (mb_strlen($name) < 2 || mb_strlen($name) > 80) throw new InvalidArgumentException('Use a name between 2 and 80 characters.');
         // 72-byte ceiling prevents bcrypt truncation on PHP installations without Argon2.
         if (mb_strlen($password) < 15 || strlen($password) > 72 || str_contains($password, "\0")) {
             throw new InvalidArgumentException('Use at least 15 characters and no more than 72 bytes for your password.');
         }
         $hash = password_hash($password, PASSWORD_DEFAULT);
-        $q = $this->db->prepare('INSERT INTO users(public_id,name,email,password_hash,created_at) VALUES(?,?,?,?,?) ON CONFLICT(email) DO NOTHING');
-        $q->execute([bin2hex(random_bytes(16)), $name, $email, $hash, time()]);
+        $q = $this->db->prepare('INSERT INTO users(public_id,first_name,middle_name,last_name,email,password_hash,created_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(email) DO NOTHING');
+        $q->execute([bin2hex(random_bytes(16)), $firstName, $middleName === '' ? null : $middleName, $lastName, $email, $hash, time()]);
         // Existing registrations never overwrite a password or trigger another email.
         if ($q->rowCount() === 1) $this->sendVerification((int)$this->db->lastInsertId(), $email);
     }

@@ -7,7 +7,7 @@ function denies(Closure $f,string $class,string $label):void{try{$f();}catch(Thr
 $db=new PDO('sqlite::memory:',null,null,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
 migrateAccounts($db);migrateAccounts($db);
 check((bool)$db->query('SELECT version FROM app_migrations WHERE version=3')->fetchColumn(),'migration 3 adds the designs tables and can run twice');
-function seed(string $name,bool $verified=true,string $status='active'):int{global $db;$db->prepare('INSERT INTO users(public_id,name,email,password_hash,role,status,verified_at,created_at) VALUES(?,?,?,?,?,?,?,?)')->execute([$name,$name,$name.'@example.com','x','user',$status,$verified?time():null,time()]);return (int)$db->lastInsertId();}
+function seed(string $name,bool $verified=true,string $status='active'):int{global $db;$db->prepare('INSERT INTO users(public_id,first_name,last_name,email,password_hash,role,status,verified_at,created_at) VALUES(?,?,?,?,?,?,?,?,?)')->execute([$name,$name,'Tester',$name.'@example.com','x','user',$status,$verified?time():null,time()]);return (int)$db->lastInsertId();}
 $owner=seed('owner');$other=seed('other');$pending=seed('pending',false);$suspended=seed('suspended',true,'suspended');
 $lib=new DesignLibrary($db,new ProjectSubmission($db,sys_get_temp_dir().'/archi-missing-blueprints'));
 $snap=fn(string $room,int $n=1)=>json_encode(['application'=>'ARCHIspace','version'=>'3.0','state'=>['rooms'=>array_map(fn($i)=>['x'=>$i,'z'=>0,'w'=>3,'d'=>4,'name'=>"$room $i"],range(1,$n)),'site'=>['width'=>20,'depth'=>20],'blueprints'=>[]]]);

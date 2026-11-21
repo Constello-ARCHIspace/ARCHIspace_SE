@@ -66,7 +66,7 @@ foreach(array_slice($rows,0,5) as $p){
 usort($events,fn($a,$b)=>$b['t']<=>$a['t']);
 $events=array_slice($events,0,4);
 
-$first=explode(' ',trim((string)$user['name']))[0];
+$first=$user['first_name'];
 $initials=mb_strtoupper(mb_substr((string)$user['name'],0,2));
 ?>
 <!doctype html>

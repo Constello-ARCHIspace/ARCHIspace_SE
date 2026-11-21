@@ -5,11 +5,20 @@ $checks=0;function check(bool $v,string $label):void{global $checks;if(!$v)throw
 function denies(Closure $f,string $class,string $label):void{try{$f();}catch(Throwable $e){if($e instanceof $class){check(true,$label);return;}throw $e;}throw new RuntimeException('FAIL: '.$label);}
 $db=new PDO('sqlite::memory:',null,null,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
 // Upgrade a populated pre-role schema, then repeat the migration.
-$old=file_get_contents(dirname(__DIR__).'/app/schema.sql');$old=preg_replace('/^.*(?:role TEXT|status TEXT|session_version INTEGER).*\n/m','',$old);$db->exec($old);
+$db->exec('CREATE TABLE users (
+ id INTEGER PRIMARY KEY AUTOINCREMENT, public_id TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+ email TEXT NOT NULL UNIQUE COLLATE NOCASE, password_hash TEXT NOT NULL, verified_at INTEGER, created_at INTEGER NOT NULL
+)');
 $db->prepare('INSERT INTO users(public_id,name,email,password_hash,verified_at,created_at) VALUES(?,?,?,?,?,?)')->execute(['legacy','Legacy user','legacy@example.com',password_hash('A long testing password!',PASSWORD_DEFAULT),time(),time()]);
+$db->exec("INSERT INTO users(public_id,name,email,password_hash,created_at) VALUES
+ ('multi','First Middle One Last','multi@example.com','x',0), ('single','Solo','solo@example.com','x',0)");
 migrateAccounts($db);migrateAccounts($db);
 check($db->query("SELECT role FROM users WHERE public_id='legacy'")->fetchColumn()==='user','migration preserves legacy user with safe default role');
-function seed(string $name,string $role,bool $verified=true):int{global $db;$db->prepare('INSERT INTO users(public_id,name,email,password_hash,role,verified_at,created_at) VALUES(?,?,?,?,?,?,?)')->execute([$name,$name,$name.'@example.com',password_hash('A long testing password!',PASSWORD_DEFAULT),$role,$verified?time():null,time()]);return (int)$db->lastInsertId();}
+check($db->query("SELECT first_name,middle_name,last_name,name FROM users WHERE public_id='multi'")->fetch(PDO::FETCH_NUM) === ['First','Middle One','Last','First Middle One Last'],'migration splits multi-word names and preserves the display name');
+check($db->query("SELECT first_name,middle_name,last_name,name FROM users WHERE public_id='single'")->fetch(PDO::FETCH_NUM) === ['Solo',null,'','Solo'],'migration preserves a legacy single-word name');
+denies(fn()=>$db->exec("INSERT INTO users(public_id,first_name,email,password_hash,created_at) VALUES('missing','One','missing@example.com','x',0)"),PDOException::class,'upgraded database requires a surname on new accounts');
+denies(fn()=>$db->exec("UPDATE users SET first_name=' ' WHERE public_id='legacy'"),PDOException::class,'upgraded database rejects blank first names');
+function seed(string $name,string $role,bool $verified=true):int{global $db;$db->prepare('INSERT INTO users(public_id,first_name,last_name,email,password_hash,role,verified_at,created_at) VALUES(?,?,?,?,?,?,?,?)')->execute([$name,$name,'Tester',$name.'@example.com',password_hash('A long testing password!',PASSWORD_DEFAULT),$role,$verified?time():null,time()]);return (int)$db->lastInsertId();}
 $admin=seed('Admin','admin');$sub=seed('Reviewer','sub_admin');$sub2=seed('OtherReviewer','sub_admin');$owner=seed('Owner','user');$other=seed('OtherOwner','user');$pending=seed('Pending','user',false);
 $s=new AdminService($db);$ps=new ProjectSubmission($db,sys_get_temp_dir().'/archi-missing-blueprints');
 $snapshot=json_encode(['state'=>['rooms'=>[['x'=>0,'z'=>0,'w'=>4,'d'=>5,'name'=>'Living']],'site'=>['width'=>20,'depth'=>20],'blueprints'=>[]]]);

@@ -8,7 +8,7 @@ fs.copyFileSync(path.join(source,'config.example.php'),path.join(temp,'config.ph
 const php=new PHP(await loadNodeRuntime('8.5',{emscriptenOptions:{processId:124}}));php.mkdir('/app');await php.mount('/app',createNodeFsMountHandler(temp));
 const run=async code=>{const r=await php.run({code:'<?php '+code});if(r.errors||r.exitCode)throw Error(r.errors||r.text);return r.text};
 const db="$c=require '/app/config.php';$d=new PDO('sqlite:'.$c['database']);$d->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION);";
-await run(db+`require '/app/app/migrate.php';migrateAccounts($d);$q=$d->prepare('INSERT INTO users(public_id,name,email,password_hash,role,verified_at,created_at) VALUES(?,?,?,?,?,?,?)');foreach(['admin','sub_admin','user','user'] as $i=>$role)$q->execute(['http-user-'.($i+1),'Test user '.($i+1),'user'.($i+1).'@example.com',password_hash('A long testing password!',PASSWORD_DEFAULT),$role,time(),time()]);`);
+await run(db+`require '/app/app/migrate.php';migrateAccounts($d);$q=$d->prepare('INSERT INTO users(public_id,first_name,last_name,email,password_hash,role,verified_at,created_at) VALUES(?,?,?,?,?,?,?,?)');foreach(['admin','sub_admin','user','user'] as $i=>$role)$q->execute(['http-user-'.($i+1),'Test','user '.($i+1),'user'.($i+1).'@example.com',password_hash('A long testing password!',PASSWORD_DEFAULT),$role,time(),time()]);`);
 let n=0;const check=(v,label)=>{if(!v)throw Error('FAIL: '+label);n++;console.log('PASS: '+label)};
 // Separate cookie stores for each browser/account; request handling is sequential.
 const clients=Array.from({length:5},()=>new PHPRequestHandler({php,documentRoot:'/app/public',absoluteUrl:'http://localhost:8000'}));
@@ -52,6 +52,6 @@ r=await clients[2].request({url:'/invite.php?token='+token});check(r.httpStatusC
 r=await clients[2].request({url:'/invite.php'});check(r.httpStatusCode===200&&r.text.includes('Accept invitation'),'invitation requires explicit confirmation');
 r=await clients[2].request({url:'/invite.php',method:'POST',body:{csrf:csrf(r)}});check(r.httpStatusCode===303,'verified owner accepts invitation with CSRF');
 // Public registration ignores privilege fields even when SMTP is unavailable in this test environment.
-r=await clients[4].request({url:'/auth.php?view=register'});r=await clients[4].request({url:'/auth.php?view=register',method:'POST',body:{csrf:csrf(r),name:'Public applicant',email:'applicant@example.com',password:'A long testing password!',confirmation:'A long testing password!',role:'admin',verified_at:'1',status:'active'}});
+r=await clients[4].request({url:'/auth.php?view=register'});r=await clients[4].request({url:'/auth.php?view=register',method:'POST',body:{csrf:csrf(r),first_name:'Public',last_name:'applicant',email:'applicant@example.com',password:'A long testing password!',confirmation:'A long testing password!',role:'admin',verified_at:'1',status:'active'}});
 check(await run(db+"echo $d->query(\"SELECT role || ':' || (verified_at IS NULL) FROM users WHERE email='applicant@example.com'\")->fetchColumn();")==='user:1','public registration cannot grant staff or verified status');
 console.log(n+' admin HTTP checks passed');php.exit();fs.rmSync(temp,{recursive:true,force:true});

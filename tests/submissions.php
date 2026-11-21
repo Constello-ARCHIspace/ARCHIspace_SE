@@ -6,7 +6,7 @@ $checks=0;function check(bool $v,string $label):void{global $checks;if(!$v)throw
 function denies(Closure $f,string $class,string $label):void{try{$f();}catch(Throwable $e){if($e instanceof $class){check(true,$label);return;}throw $e;}throw new RuntimeException('FAIL: '.$label);}
 $db=new PDO('sqlite::memory:',null,null,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
 $db->exec(file_get_contents(dirname(__DIR__).'/app/schema.sql'));migrateAccounts($db);
-function seed(string $name,string $role):int{global $db;$db->prepare('INSERT INTO users(public_id,name,email,password_hash,role,verified_at,created_at) VALUES(?,?,?,?,?,?,?)')->execute([$name,$name,$name.'@example.com','x',$role,time(),time()]);return (int)$db->lastInsertId();}
+function seed(string $name,string $role):int{global $db;$db->prepare('INSERT INTO users(public_id,first_name,last_name,email,password_hash,role,verified_at,created_at) VALUES(?,?,?,?,?,?,?,?)')->execute([$name,$name,'Tester',$name.'@example.com','x',$role,time(),time()]);return (int)$db->lastInsertId();}
 $admin=seed('Admin','admin');$sub=seed('Reviewer','sub_admin');$owner=seed('Owner','user');$other=seed('Other','user');
 $s=new AdminService($db);$ps=new ProjectSubmission($db,sys_get_temp_dir().'/archi-missing-blueprints');
 $snap=fn(float $w)=>json_encode(['state'=>['rooms'=>[['x'=>0,'z'=>0,'w'=>$w,'d'=>5,'name'=>'Living']],'site'=>['width'=>20,'depth'=>20],'blueprints'=>[]]]);

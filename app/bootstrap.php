@@ -33,7 +33,7 @@ try {
     $db = new PDO('sqlite:' . $config['database'], null, null, [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
     $db->exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
     $db->query('SELECT role,status,session_version FROM users LIMIT 0');
-    if (!$db->query('SELECT version FROM app_migrations WHERE version=2')->fetchColumn()) throw new RuntimeException('Database migration required');
+    if (!$db->query('SELECT version FROM app_migrations WHERE version=4')->fetchColumn()) throw new RuntimeException('Database migration required');
 } catch (Throwable $error) { http_response_code(503); exit('Account service unavailable. The administrator should check configuration and run php bin/migrate.php after upgrading.'); }
 $auth = new Auth($db, function(string $email, string $token) use ($config, $base): void {
     $link = $base . '/auth.php?view=verify&token=' . rawurlencode($token);
@@ -49,7 +49,7 @@ function csrfCheck(): void {
 }
 function requireUser(bool $json = false): array {
     global $db;
-    $q = $db->prepare("SELECT id,public_id,name,email,role,status,session_version FROM users WHERE id=? AND verified_at IS NOT NULL AND status='active'");
+    $q = $db->prepare("SELECT id,public_id,name,first_name,email,role,status,session_version FROM users WHERE id=? AND verified_at IS NOT NULL AND status='active'");
     $q->execute([$_SESSION['user_id'] ?? 0]);
     $user = $q->fetch(PDO::FETCH_ASSOC);
     if (!$user || (int)$user['session_version'] !== (int)($_SESSION['session_version'] ?? -1)) {

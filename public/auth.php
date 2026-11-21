@@ -12,14 +12,17 @@ if ($view === 'verify' && isset($_GET['token'])) {
 }
 if (isset($_SESSION['user_id']) && $view !== 'verify') { header('Location: ' . accountHome(requireUser())); exit; }
 $error = ''; $message = $_SESSION['notice'] ?? ''; unset($_SESSION['notice']);
-$email = ''; $name = '';
+$email = ''; $firstName = ''; $middleName = ''; $lastName = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrfCheck();
     try {
-        foreach (['email','name','password','confirmation'] as $key) {
+        foreach (['email','first_name','middle_name','last_name','password','confirmation'] as $key) {
             if (isset($_POST[$key]) && !is_string($_POST[$key])) throw new InvalidArgumentException('Invalid form input.');
         }
-        $email = trim($_POST['email'] ?? ''); $name = trim($_POST['name'] ?? '');
+        $email = trim($_POST['email'] ?? '');
+        $firstName = $_POST['first_name'] ?? '';
+        $middleName = $_POST['middle_name'] ?? '';
+        $lastName = $_POST['last_name'] ?? '';
         $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown'; // Never trust client-provided proxy headers.
         $auth->limit('ip:' . $view . ':' . $ip, $view === 'login' ? 30 : 10, 900);
         if ($view !== 'verify') {
@@ -28,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($view === 'register') {
             if (($_POST['password'] ?? '') !== ($_POST['confirmation'] ?? '')) throw new InvalidArgumentException('Passwords do not match.');
-            $auth->register($name, $email, $_POST['password'] ?? '');
+            $auth->register($firstName, $lastName, $email, $_POST['password'] ?? '', $middleName);
             $_SESSION['notice'] = 'If this address is eligible, a verification email has been sent. Check your inbox and spam folder. Already registered? Sign in or resend verification.';
             header('Location: auth.php?view=resend', true, 303); exit;
         } elseif ($view === 'resend') {
@@ -72,7 +75,11 @@ $subtitles = ['login'=>'Pick up where your last idea left off.', 'register'=>'A 
 <?php if ($error): ?><div class="notice error" role="alert"><?= esc($error) ?></div><?php endif; ?>
 <?php if ($message): ?><div class="notice" role="status"><?= esc($message) ?></div><?php endif; ?>
 <form method="post" action="auth.php?view=<?= esc($view) ?>"><input type="hidden" name="csrf" value="<?= esc($_SESSION['csrf']) ?>">
-<?php if ($view === 'register'): ?><div class="field"><label for="name">Full name</label><input id="name" name="name" autocomplete="name" minlength="2" maxlength="80" placeholder="Your full name" value="<?= esc($name) ?>" required></div><?php endif; ?>
+<?php if ($view === 'register'): ?>
+<div class="field"><label for="first_name">First name</label><input id="first_name" name="first_name" autocomplete="given-name" maxlength="80" value="<?= esc($firstName) ?>" required></div>
+<div class="field"><label for="middle_name">Middle name (optional)</label><input id="middle_name" name="middle_name" autocomplete="additional-name" maxlength="80" value="<?= esc($middleName) ?>"></div>
+<div class="field"><label for="last_name">Last name</label><input id="last_name" name="last_name" autocomplete="family-name" maxlength="80" value="<?= esc($lastName) ?>" required></div>
+<?php endif; ?>
 <?php if ($view !== 'verify'): ?><div class="field"><label for="email">Email address</label><input id="email" type="email" name="email" autocomplete="email" maxlength="254" placeholder="you@example.com" value="<?= esc($email) ?>" required></div><?php endif; ?>
 <?php if (in_array($view, ['login','register'], true)): ?><div class="field"><label for="password">Password</label><div class="password-field"><input id="password" type="password" name="password" autocomplete="<?= $view === 'register' ? 'new-password' : 'current-password' ?>" <?= $view === 'register' ? 'minlength="15" aria-describedby="password-help"' : '' ?> required><button type="button" class="reveal" data-toggle="password" aria-label="Show password" aria-pressed="false"><?= $view === 'login' ? 'Show password' : 'Show' ?></button></div></div>
 <?php if ($view === 'register'): ?><p id="password-help" class="hint">Use at least 15 characters, up to 72 bytes. A memorable passphrase works well. <span id="password-count" class="pw-status" aria-live="polite"></span></p><div class="field"><label for="confirmation">Confirm password</label><div class="password-field"><input id="confirmation" type="password" name="confirmation" autocomplete="new-password" required><button type="button" class="reveal" data-toggle="confirmation" aria-label="Show confirmation password" aria-pressed="false">Show</button></div><p id="password-match" class="hint pw-status" aria-live="polite"></p></div>

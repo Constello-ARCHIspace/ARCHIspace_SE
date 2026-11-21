@@ -7,7 +7,7 @@ function check(v,label){if(!v)throw Error('FAIL: '+label);n++;console.log('PASS:
 try{
 for(const folder of ['bin','app'])fs.cpSync(path.join(source,folder),path.join(dir,folder),{recursive:true});fs.copyFileSync(path.join(source,'config.example.php'),path.join(dir,'config.php'));
 check(run('bin/init.php').includes('initialized'),'CLI initializes private database');
-fs.writeFileSync(path.join(dir,'seed.php'),`<?php $c=require __DIR__.'/config.php';$d=new PDO('sqlite:'.$c['database']);$d->prepare('INSERT INTO users(public_id,name,email,password_hash,verified_at,created_at) VALUES(?,?,?,?,?,?)')->execute(['cli-fixture','CLI Test','cli@example.com',password_hash('A long test passphrase!',PASSWORD_DEFAULT),NULL,time()]);`);
+fs.writeFileSync(path.join(dir,'seed.php'),`<?php $c=require __DIR__.'/config.php';$d=new PDO('sqlite:'.$c['database']);$d->prepare('INSERT INTO users(public_id,first_name,last_name,email,password_hash,verified_at,created_at) VALUES(?,?,?,?,?,?,?)')->execute(['cli-fixture','CLI','Test','cli@example.com',password_hash('A long test passphrase!',PASSWORD_DEFAULT),NULL,time()]);`);
 run('seed.php');
 check(run('bin/promote-admin.php',['cli@example.com']).includes('Register and verify'),'CLI refuses unverified account');
 fs.writeFileSync(path.join(dir,'verify-fixture.php'),`<?php $c=require __DIR__.'/config.php';$d=new PDO('sqlite:'.$c['database']);$d->exec('UPDATE users SET verified_at=1');`);run('verify-fixture.php');

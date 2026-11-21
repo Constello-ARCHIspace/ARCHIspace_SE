@@ -31,7 +31,7 @@ r=await server.request({url:'/auth.php?view=verify'});check(r.httpStatusCode===2
 csrf=r.text.match(/name="csrf" value="([a-f0-9]+)"/)[1];
 r=await server.request({url:'/auth.php?view=verify',method:'POST',body:{csrf}});check(r.text.includes('invalid, expired, or already used'),'invalid verification POST rejected');
 // Seed a test-only verified account without using SMTP.
-await php.run({code:`<?php $c=require '/app/config.php';$d=new PDO('sqlite:'.$c['database']);$q=$d->prepare('INSERT INTO users(public_id,name,email,password_hash,verified_at,created_at) VALUES(?,?,?,?,?,?)');$q->execute(['http-smoke-user','HTTP Test','http-test@example.com',password_hash('A long test passphrase!',PASSWORD_DEFAULT),time(),time()]);`});
+await php.run({code:`<?php $c=require '/app/config.php';$d=new PDO('sqlite:'.$c['database']);$q=$d->prepare('INSERT INTO users(public_id,first_name,last_name,email,password_hash,verified_at,created_at) VALUES(?,?,?,?,?,?,?)');$q->execute(['http-smoke-user','HTTP','Test','http-test@example.com',password_hash('A long test passphrase!',PASSWORD_DEFAULT),time(),time()]);`});
 r=await server.request({url:'/auth.php',method:'POST',body:{csrf,email:'http-test@example.com',password:'A long test passphrase!'}});
 check(r.httpStatusCode===303 && r.headers.location[0]==='index.php','verified HTTP login redirects');
 check(r.headers['set-cookie']?.length>0,'login rotates session cookie');

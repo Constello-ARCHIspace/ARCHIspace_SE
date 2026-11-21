@@ -1,0 +1,22 @@
+# Local configuration and credentials
+/config.php
+/auth.json
+/.env
+/.env.*
+!/.env.example
+
+# Runtime database, uploaded blueprints, and locally prepared datasets
+/storage/
+/hazard-data/
+
+# Installed dependencies and Python bytecode
+/vendor/
+node_modules/
+__pycache__/
+*.pyc
+
+# Local logs and OS metadata
+*.log
+.DS_Store
+Thumbs.db
+Desktop.ini

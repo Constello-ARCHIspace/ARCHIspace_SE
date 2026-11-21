@@ -15,6 +15,8 @@ php -S localhost:8000 -t public
 
 Existing installation: take a private backup, replace the source folders described in README.md, preserve configuration/storage, and run `php bin/migrate.php`. The migration is repeatable and preserves existing accounts. It does not create an Admin or send mail.
 
+For existing accounts, the migration uses the first and last words of the saved name as the first and last names. Any words between them become the middle name. A single-word name stays in the first-name field. New registrations accept compound names in each field and require both a first and a last name.
+
 ## Create the first Admin
 
 Register your account at `/auth.php?view=register`, verify the emailed link, then run from the project root:

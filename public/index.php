@@ -285,7 +285,8 @@ canvas#plan2d{display:none;cursor:default}
         <div class="bp-sub">Drag &amp; drop or click · JPG, PNG, PDF, SVG</div>
       </div>
       <input type="file" id="bpFileInput" accept="image/*,.pdf,.svg" multiple hidden>
-      <p class="help" style="margin-top:8px">Upload house or lot blueprints to overlay on the floor plan. Adjust opacity and scale to trace your design.</p>
+      <p class="help" style="margin-top:8px">Upload house or lot blueprints to overlay on the floor plan and the 3D model. Adjust opacity and scale to trace your design.</p>
+      <label class="help lm-check"><input type="checkbox" id="bp3d" checked> Show blueprints in the 3D model (lot plans on the ground, house plans on their floor)</label>
     </div>
     <div class="sect"><div class="stitle">Hazard Data · Location</div>
       <form class="lm-search" id="lmSearch" role="search" novalidate><label for="lmQuery">Find the lot by address</label><div class="row"><input id="lmQuery" type="search" maxlength="200" placeholder="Street, barangay, landmark or city" autocomplete="off" spellcheck="false"><button type="submit" id="lmSearchBtn">Search</button></div></form>
@@ -1405,6 +1406,45 @@ function drawBlueprintOverlays(ctx,s){
   }
   ctx.globalAlpha=1;
 }
+/* Blueprints in the 3D model: the same image, position, size, rotation and opacity as the 2D overlay.
+   Lot / site plans follow the ground; house plans lie on the floor they belong to (only the floor being edited,
+   as in the 2D plan), just above the floor slab and under walls and furniture. */
+const BP3D={group:null,tex:new Map()};
+function bp3dTexture(bp,img){
+  let t=BP3D.tex.get(bp.id);
+  if(t&&t.image===img)return t.tex;
+  if(t)t.tex.dispose();
+  const tex=new THREE.Texture(img);tex.colorSpace=THREE.SRGBColorSpace;tex.anisotropy=8;tex.needsUpdate=true;
+  BP3D.tex.set(bp.id,{image:img,tex});return tex}
+function bp3dClear(){
+  const g=BP3D.group;if(!g)return;
+  g.traverse(n=>{if(n.geometry)n.geometry.dispose();if(n.material)n.material.dispose()});
+  if(g.parent)g.parent.remove(g);BP3D.group=null}
+function bp3dSync(){
+  if(!scene||!world||typeof THREE==='undefined')return;
+  bp3dClear();
+  // Forget textures of removed blueprints.
+  for(const id of [...BP3D.tex.keys()])if(!S.blueprints.some(b=>b.id===id)){BP3D.tex.get(id).tex.dispose();BP3D.tex.delete(id)}
+  if(S.site.bp3d===false||!S.blueprints.length)return;
+  const g=new THREE.Group();g.name='blueprints3d';
+  for(const bp of S.blueprints){
+    if(!bp.visible||(bp.type==='house'&&lvl(bp)!==curFloor))continue;
+    const img=ensureBpImage(bp);
+    if(!img)continue;
+    if(!img.complete||!img.naturalWidth){img.addEventListener('load',bp3dSync,{once:true});continue}
+    const w=(bp.metersPerPixel?bp.w*bp.metersPerPixel:S.site.width)*bp.scale,h=w*img.naturalHeight/img.naturalWidth;
+    const lot=bp.type==='lot',seg=lot?Math.max(2,Math.min(64,Math.round(Math.max(w,h)/1.5))):1;
+    const geo=new THREE.PlaneGeometry(w,h,seg,seg);geo.rotateX(-Math.PI/2);// image top points north (-z), as in the plan
+    const rot=-(bp.rotation||0)*Math.PI/180,c=Math.cos(rot),sn=Math.sin(rot),pos=geo.attributes.position;
+    for(let i=0;i<pos.count;i++){
+      const lx=pos.getX(i),lz=pos.getZ(i),x=bp.offsetX+lx*c+lz*sn,z=bp.offsetZ-lx*sn+lz*c;
+      pos.setXYZ(i,x,lot?terrainH(x,z)+.06:0,z)}
+    geo.computeVertexNormals();
+    const mat=new THREE.MeshBasicMaterial({map:bp3dTexture(bp,img),transparent:true,opacity:clamp(bp.opacity/100,.05,1),depthWrite:false,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2,fog:false});
+    const mesh=new THREE.Mesh(geo,mat);mesh.renderOrder=2;mesh.name='blueprint-'+bp.id;
+    if(!lot)mesh.position.y=groundDatum()+stackH(lvl(bp))+FLOOR+.02;
+    g.add(mesh)}
+  if(g.children.length){world.add(g);BP3D.group=g}}
 function renderBpList(){
   const el=$('bpList');
   if(!el)return;
@@ -1971,6 +2011,12 @@ function gmCompass(){const el=document.getElementById('northNeedle');if(!el)retu
  if(view!=='2d'&&camera){const e=camera.matrixWorld.elements,nx=-Math.sin(t),nz=-Math.cos(t);let fx=-e[8],fz=-e[10];if(Math.hypot(fx,fz)<.15){fx=e[4];fz=e[6]}const a=Math.atan2(nx*e[0]+nz*e[2],nx*fx+nz*fz)*180/Math.PI;if(Number.isFinite(a)&&Math.hypot(fx,fz)>1e-6)deg=a}
  el.setAttribute('transform',`rotate(${deg.toFixed(1)} 23 23)`)}
 {const rebuild0=rebuild;rebuild=function(){rebuild0();if(GM&&LM.ready)gmSync()}}
+{const rebuild1=rebuild;rebuild=function(){rebuild1();bp3dSync()}}
+{const setFloor0=setFloor;setFloor=function(i){setFloor0(i);bp3dSync()}}
+{const renderBpList0=renderBpList;renderBpList=function(){renderBpList0();bp3dSync()}}
+$('bp3d').addEventListener('change',e=>{S.site.bp3d=e.target.checked;bp3dSync();commit()});
+{const sync1=syncUI;syncUI=function(){sync1();$('bp3d').checked=S.site.bp3d!==false}}
+$('bp3d').checked=S.site.bp3d!==false;bp3dSync();// blueprints already in the design when the studio opens
 gmInit();
 lmInit();gmSync();
 // Settings and layout changes refresh the report, without rebuilding the scene.
@@ -2092,7 +2138,7 @@ async function openSubmission(){
   reviewTarget=FROM_SUBMISSION.editable?FROM_SUBMISSION:null;
   toast('Opened submission “'+FROM_SUBMISSION.name+'”. '+(reviewTarget?'To change it, edit and choose Review → Submit for review.':'A reviewer has it, so changes go in as a new submission.'))}
  catch(e){toast('Could not open that submission')}}
-window.__archi={get S(){return S},select,rebuild,addRoom,addObject,setView,loadState,TEMPLATES,makeTemplate};
+window.__archi={get S(){return S},get BP3D(){return BP3D},select,rebuild,addRoom,addObject,setView,loadState,TEMPLATES,makeTemplate};
 })();
 </script>
 <dialog id="studioGuide"><div class="guide-heading"><h2>A clearer perspective, from the first plan.</h2><button id="closeStudioGuide" aria-label="Close guide">×</button></div><ol><li><b>Import blueprint:</b> choose house or lot files, select PDF pages, and calibrate a known distance.</li><li><b>Design site:</b> use Build for rooms and objects, Site for terrain and rivers. Switch between 2D and 3D in the toolbar.</li><li><b>Simulate:</b> set time, weather, flood level and earthquake intensity, then run the scenario.</li><li><b>Review readiness:</b> review the screening report and suggested improvements.</li></ol><p>Save stores this project in your browser and uploads blueprint images to your account. Export a project file for backup or transfer. This is concept planning, not structural certification.</p><div class="guide-tour"><button type="button" class="primary" id="startTour">Take the studio tour</button><span>About a minute: where to add rooms, place the lot, check hazards, save and export.</span></div></dialog>

@@ -100,7 +100,7 @@ final class AdminService {
     }
     public function stats(int $actor): array {
         $u=$this->staff($actor);$where=$u['role']==='admin'?'':' WHERE assigned_to=?';$args=$u['role']==='admin'?[]:[$actor];
-        $q=$this->db->prepare("SELECT count(*) AS total,COALESCE(SUM(assigned_to IS NULL),0) AS unassigned,COALESCE(SUM(assigned_to IS NOT NULL),0) AS assigned,COALESCE(SUM(status='completed'),0) AS completed FROM projects".$where);$q->execute($args);$s=$q->fetch(PDO::FETCH_ASSOC);
+        $q=$this->db->prepare("SELECT count(*) AS total,COALESCE(SUM(assigned_to IS NULL),0) AS unassigned,COALESCE(SUM(assigned_to IS NULL AND created_at>=".(time()-7*86400)."),0) AS unassigned_new,COALESCE(SUM(assigned_to IS NOT NULL),0) AS assigned,COALESCE(SUM(status='completed'),0) AS completed FROM projects".$where);$q->execute($args);$s=$q->fetch(PDO::FETCH_ASSOC);
         if($u['role']==='admin')$s['active_users']=(int)$this->db->query("SELECT count(*) FROM users WHERE status='active' AND verified_at IS NOT NULL")->fetchColumn();
         $q=$this->db->prepare("SELECT count(*) FROM feedback f JOIN projects p ON p.id=f.project_id WHERE f.author_id=? AND f.status='draft'".($u['role']==='sub_admin'?' AND p.assigned_to=?':''));$q->execute($u['role']==='sub_admin'?[$actor,$actor]:[$actor]);$s['drafts']=(int)$q->fetchColumn();return $s;
     }

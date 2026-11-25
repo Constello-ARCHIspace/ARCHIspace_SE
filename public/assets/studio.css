@@ -11,6 +11,13 @@ body{font-family:Inter,system-ui,sans-serif}.shell{grid-template-rows:68px 56px 
 .cloud-state{font-family:var(--mono,monospace);font-size:11px;letter-spacing:.2px;padding:3px 8px;border-radius:999px;border:1px solid var(--line);white-space:nowrap;color:var(--muted,var(--text-muted))}
 .cloud-state.ok{color:#2f6b47;border-color:#b9d4c3;background:#eef6f0}.cloud-state.dirty{color:#8a5a12;border-color:#e6cf9f;background:#fbf4e4}.cloud-state.off{color:#6b6b6b;background:#f4f4f2}
 #designsDialog{width:min(760px,calc(100% - 32px));max-height:calc(100vh - 64px);padding:24px;border:1px solid var(--line);border-radius:8px;color:var(--text)}
+#designsDialog .guide-heading,#confirmDialog .guide-heading{justify-content:space-between;align-items:center}
+#designsDialog .guide-heading button,#confirmDialog .guide-heading button{line-height:1;padding:4px 8px;cursor:pointer}
+#confirmDialog{width:min(440px,calc(100% - 32px));padding:24px;border:1px solid var(--line);border-radius:8px;background:white;color:var(--text)}
+#confirmDialog::backdrop{background:#0b1a2e66}
+#confirmDialog p{margin:12px 0 0;font-size:14px;line-height:1.5;color:var(--muted,var(--text-muted))}
+.confirm-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}
+#confirmDialog .danger{color:#fff;background:#9b2f2f;border-color:#9b2f2f}
 #newProjectDialog { width: min(420px, calc(100% - 32px)); padding: 24px; border: 1px solid var(--line); border-radius: 10px; background: white; color: var(--text); }
 #newProjectDialog::backdrop { background: #0b1a2e66; }
 #newProjectForm { display: grid; gap: 12px; }

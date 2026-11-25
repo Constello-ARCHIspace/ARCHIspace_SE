@@ -12,7 +12,7 @@ declare(strict_types=1);
 require dirname(__DIR__) . '/app/bootstrap.php';
 $currentUser = requireUser();
 if (empty($_SESSION['csrf'])) $_SESSION['csrf'] = bin2hex(random_bytes(24));
-$appTitle = 'ARCHIspace — Concept by aqua lucero';
+$appTitle = 'Design Studio';
 $defaultProjectName = 'Untitled house';
 // Opened from a submission page (studio.php?submission=ID): the studio loads that snapshot for its owner.
 $fromSubmission = null;
@@ -469,6 +469,9 @@ canvas#plan2d{display:none;cursor:default}
     <div class="new-project-actions"><button id="cancelNewProject" type="button">Cancel</button><button type="submit" class="primary">Create project</button></div>
   </form>
 </dialog>
+<dialog id="confirmDialog" aria-labelledby="confirmTitle"><form method="dialog"><div class="guide-heading"><h2 id="confirmTitle"></h2><button value="no" aria-label="Cancel">×</button></div>
+<p id="confirmText"></p>
+<div class="confirm-actions"><button value="no" id="confirmNo">Cancel</button><button value="yes" id="confirmYes" class="primary"></button></div></form></dialog>
 <dialog id="designsDialog" aria-labelledby="designsTitle"><div class="guide-heading"><h2 id="designsTitle">My designs</h2><button type="button" id="closeDesigns" aria-label="Close My designs">×</button></div>
 <p id="designsCurrent" class="designs-current"></p>
 <div class="designs-actions"><button type="button" id="designsSave" class="primary">Save current design</button><button type="button" id="designsSaveNew">Save as new design</button><button type="button" id="designsNew">New blank design</button><button type="button" id="designsImport">Import project file (.json)</button></div>
@@ -1217,14 +1220,26 @@ async function renameDesign(d){
  try{await designsApi(null,{action:'rename',id:d.id,name});if(cloud&&cloud.id===d.id){S.name=name.trim().replace(/\s+/g,' ');$('projName').value=S.name;commit();cloud.hash=hashText(cloudSnapshot());storeCloud();updateCloudBadge()}renderDesigns()}
  catch(e){designsStatus(e.message)}}
 async function deleteDesign(d){
- if(!confirm(`Delete "${d.name}" and all ${d.versions} saved versions? This cannot be undone.`))return;
+ if(!await askConfirm('Delete design?',`Delete "${d.name}" and all ${d.versions} saved versions? This cannot be undone.`,'Delete',true))return;
+ if(!await askConfirm('Final check',`Permanently delete "${d.name}"?`,'Yes, delete it',true))return;
  try{await designsApi(null,{action:'delete',id:d.id});if(cloud&&cloud.id===d.id)detachCloud();designsStatus(`Deleted "${d.name}".`);renderDesigns()}
  catch(e){designsStatus(e.message)}}
 function openDesigns(message){designsStatus(message||'');if(!$('designsDialog').open)$('designsDialog').showModal();renderDesigns().then(()=>{if(message)designsStatus(message)})}
 $('loadBtn').onclick=()=>openDesigns();
 $('closeDesigns').onclick=()=>$('designsDialog').close();
-$('designsSave').onclick=()=>saveAndReport(false);
-$('designsSaveNew').onclick=()=>saveAndReport(true);
+// In-page confirm (replaces the browser's confirm box). Resolves true only on the confirm button.
+function askConfirm(title,text,okLabel,danger){
+ const dlg=$('confirmDialog');$('confirmTitle').textContent=title;$('confirmText').textContent=text;
+ const yes=$('confirmYes');yes.textContent=okLabel;yes.className=danger?'danger':'primary';dlg.returnValue='';
+ dlg.showModal();$('confirmNo').focus();
+ return new Promise(r=>dlg.addEventListener('close',()=>r(dlg.returnValue==='yes'),{once:true}))}
+async function confirmSave(asNew){
+ const name=(S.name||'').trim()||'Untitled design';
+ const first=asNew?`Save "${name}" as a new design?`:cloud?`Save "${name}" as version ${cloud.version+1}?`:`Save "${name}" to My designs?`;
+ return await askConfirm(asNew?'Save as new design?':'Save design?',first,'Save')
+  &&await askConfirm('Final check',asNew?'Create this new design now?':'Save this design now?','Yes, save it')}
+$('designsSave').onclick=async()=>{if(await confirmSave(false))saveAndReport(false)};
+$('designsSaveNew').onclick=async()=>{if(await confirmSave(true))saveAndReport(true)};
 function startBlankDesign(name){
  if(!okToReplace())return false;
  const design=blank();

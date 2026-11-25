@@ -33,11 +33,15 @@ try {
     $db = new PDO('sqlite:' . $config['database'], null, null, [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
     $db->exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
     $db->query('SELECT role,status,session_version FROM users LIMIT 0');
-    if (!$db->query('SELECT version FROM app_migrations WHERE version=5')->fetchColumn()) throw new RuntimeException('Database migration required');
+    if (!$db->query('SELECT version FROM app_migrations WHERE version=6')->fetchColumn()) throw new RuntimeException('Database migration required');
 } catch (Throwable $error) { http_response_code(503); exit('Account service unavailable. The administrator should check configuration and run php bin/migrate.php after upgrading.'); }
-$auth = new Auth($db, function(string $email, string $token) use ($config, $base): void {
-    $link = $base . '/auth.php?view=verify&token=' . rawurlencode($token);
-    sendAppMail($config,$email,'Verify your ARCHIspace email',"Welcome to ARCHIspace!\n\nConfirm your email to start designing:\n" . $link . "\n\nThis link expires in one hour and can be used once. If you did not register, ignore this email.");
+$auth = new Auth($db, function(string $email, string $token, string $purpose = 'verify') use ($config, $base): void {
+    if ($purpose === 'reset') {
+        $link = $base . '/auth.php?view=reset&token=' . rawurlencode($token);
+        sendAppMail($config,$email,'Reset your ARCHIspace password',"We received a request to reset your ARCHIspace password.\n\nChoose a new password here:\n" . $link . "\n\nThis link expires in one hour and can be used once. If you did not ask for this, ignore this email; your password stays the same.");
+        return;
+    }
+    sendAppMail($config,$email,"$token is your ARCHIspace verification code","Welcome to ARCHIspace!\n\nEnter this code on the verification page to confirm your email:\n\n    $token\n\nThe code expires in 15 minutes and can be used once. If you did not register, ignore this email.");
 });
 function esc(string $text): string { return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 function csrfCheck(): void {

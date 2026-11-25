@@ -26,10 +26,10 @@ check(r.httpStatusCode===403,'missing CSRF rejected');
 r=await server.request({url:'/studio.php'});check(r.httpStatusCode===302,'designer requires login');
 for(const p of ['blueprint.php','hazard.php']){r=await server.request({url:'/'+p});check(r.httpStatusCode===401,p+' requires login');}
 r=await server.request({url:'/logout.php'});check(r.httpStatusCode===405,'GET logout forbidden');
-r=await server.request({url:'/auth.php?view=verify&token='+ 'a'.repeat(64)});check(r.httpStatusCode===303,'verification secret removed from URL');
-r=await server.request({url:'/auth.php?view=verify'});check(r.httpStatusCode===200 && r.text.includes('Verify my email'),'verification GET shows confirmation');
+r=await server.request({url:'/auth.php?view=reset&token='+ 'a'.repeat(64)});check(r.httpStatusCode===303,'reset secret removed from URL');
+r=await server.request({url:'/auth.php?view=verify'});check(r.httpStatusCode===200 && r.text.includes('autocomplete="one-time-code"'),'verification GET shows code form');
 csrf=r.text.match(/name="csrf" value="([a-f0-9]+)"/)[1];
-r=await server.request({url:'/auth.php?view=verify',method:'POST',body:{csrf}});check(r.text.includes('invalid, expired, or already used'),'invalid verification POST rejected');
+r=await server.request({url:'/auth.php?view=verify',method:'POST',body:{csrf,email:'nobody@example.com',code:'123456'}});check(r.text.includes('incorrect or has expired'),'invalid verification code rejected');
 // Seed a test-only verified account without using SMTP.
 await php.run({code:`<?php $c=require '/app/config.php';$d=new PDO('sqlite:'.$c['database']);$q=$d->prepare('INSERT INTO users(public_id,first_name,last_name,email,password_hash,verified_at,created_at) VALUES(?,?,?,?,?,?,?)');$q->execute(['http-smoke-user','HTTP','Test','http-test@example.com',password_hash('A long test passphrase!',PASSWORD_DEFAULT),time(),time()]);`});
 r=await server.request({url:'/auth.php',method:'POST',body:{csrf,email:'http-test@example.com',password:'A long test passphrase!'}});

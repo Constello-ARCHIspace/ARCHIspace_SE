@@ -58,15 +58,21 @@ final class Auth
         if ($dob->diff($today)->y < 18) {
             throw new InvalidArgumentException('You must be at least 18 years old to create an account.');
         }
+        $hash = self::passwordHash($password);
+        $q =$this->db->prepare('INSERT INTO users(public_id,first_name,middle_name,last_name,email,phone,birthdate,password_hash,created_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(email) DO NOTHING');
+        $q->execute([bin2hex(random_bytes(16)), $firstName, $middleName === '' ? null : $middleName, $lastName, $email, $phone, $birthdate, $hash, time()]);
+        // Existing registrations never overwrite a password or trigger another email.
+        if ($q->rowCount() !== 1) throw new DomainException('An account with this email already exists. Log in, or use Forgot password if you cannot access it.');
+        $this->sendVerification((int)$this->db->lastInsertId(), $email);
+    }
+
+    private static function passwordHash(string $password): string
+    {
         // 72-byte ceiling prevents bcrypt truncation on PHP installations without Argon2.
         if (mb_strlen($password) < 15 || strlen($password) > 72 || str_contains($password, "\0")) {
             throw new InvalidArgumentException('Use at least 15 characters and no more than 72 bytes for your password.');
         }
-        $hash = password_hash($password, PASSWORD_DEFAULT);
-        $q = $this->db->prepare('INSERT INTO users(public_id,first_name,middle_name,last_name,email,phone,birthdate,password_hash,created_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(email) DO NOTHING');
-        $q->execute([bin2hex(random_bytes(16)), $firstName, $middleName === '' ? null : $middleName, $lastName, $email, $phone, $birthdate, $hash, time()]);
-        // Existing registrations never overwrite a password or trigger another email.
-        if ($q->rowCount() === 1) $this->sendVerification((int)$this->db->lastInsertId(), $email);
+        return password_hash($password, PASSWORD_DEFAULT);
     }
 
     public function resend(string $email): void
@@ -80,28 +86,80 @@ final class Auth
 
     private function sendVerification(int $id, string $email): void
     {
-        $raw = bin2hex(random_bytes(32));
-        $hash = hash('sha256', $raw);
-        $q = $this->db->prepare('INSERT INTO verification_tokens(token_hash,user_id,expires_at,created_at) VALUES(?,?,?,?)');
-        $q->execute([$hash, $id, time() + 3600, time()]);
+        // Only the newest code stays valid, which keeps the guessable space to one code per account.
+        $this->db->prepare('DELETE FROM verification_tokens WHERE user_id=?')->execute([$id]);
+        $this->sendToken('verification_tokens', 'verify', $id, $email);
+    }
+
+    public function requestReset(string $email): void
+    {
+        $email = self::email($email);
+        $q = $this->db->prepare("SELECT id FROM users WHERE email=? AND status='active'");
+        $q->execute([$email]);
+        $id = $q->fetchColumn();
+        if ($id === false) return;
+        // Only the newest reset link stays valid.
+        $this->db->prepare('DELETE FROM password_reset_tokens WHERE user_id=?')->execute([$id]);
+        $this->sendToken('password_reset_tokens', 'reset', (int)$id, $email);
+    }
+
+    public function resetPassword(string $raw, string $password): bool
+    {
+        $hash = self::passwordHash($password); // Validate first so a rejected password does not burn the link.
+        if (!preg_match('/^[a-f0-9]{64}$/D', $raw)) return false;
+        $this->db->beginTransaction();
         try {
-            ($this->send)($email, $raw);
+            $q = $this->db->prepare('DELETE FROM password_reset_tokens WHERE token_hash=? AND expires_at>? RETURNING user_id');
+            $q->execute([hash('sha256', $raw), time()]);
+            $id = $q->fetchColumn();
+            $q->closeCursor();
+            if ($id === false) { $this->db->rollBack(); return false; }
+            // The emailed link proves inbox ownership, so it also verifies a pending account; the session_version bump signs out other sessions.
+            $this->db->prepare('UPDATE users SET password_hash=?, session_version=session_version+1, verified_at=coalesce(verified_at,?) WHERE id=?')->execute([$hash, time(), $id]);
+            $this->db->prepare('DELETE FROM password_reset_tokens WHERE user_id=?')->execute([$id]);
+            $this->db->prepare('DELETE FROM verification_tokens WHERE user_id=?')->execute([$id]);
+            $this->db->commit();
+            return true;
         } catch (Throwable $error) {
-            $this->db->prepare('DELETE FROM verification_tokens WHERE token_hash=?')->execute([$hash]);
-            // No SMTP credentials, email addresses, or verification links in logs.
-            error_log('ARCHIspace: verification email transport failed.');
-            throw new RuntimeException('Email delivery is temporarily unavailable. Please use Resend verification later.');
+            $this->db->rollBack();
+            throw $error;
         }
     }
 
-    public function verify(string $raw): bool
+    /** @param 'verification_tokens'|'password_reset_tokens' $table */
+    private function sendToken(string $table, string $purpose, int $id, string $email): void
     {
-        if (!preg_match('/^[a-f0-9]{64}$/D', $raw)) return false;
+        $code = $purpose === 'verify';
+        $raw = $code ? sprintf('%06d', random_int(0, 999999)) : bin2hex(random_bytes(32));
+        // Codes are salted with the user id so two accounts with the same code don't collide on the primary key.
+        $hash = hash('sha256', $code ? "$id:$raw" : $raw);
+        $q = $this->db->prepare("INSERT INTO $table(token_hash,user_id,expires_at,created_at) VALUES(?,?,?,?)");
+        $q->execute([$hash, $id, time() + ($code ? 900 : 3600), time()]);
+        try {
+            ($this->send)($email, $raw, $purpose);
+        } catch (Throwable $error) {
+            $this->db->prepare("DELETE FROM $table WHERE token_hash=?")->execute([$hash]);
+            // No SMTP credentials, email addresses, or account links in logs.
+            error_log("ARCHIspace: $purpose email transport failed.");
+            throw new RuntimeException('Email delivery is temporarily unavailable. Please try again later.');
+        }
+    }
+
+    /** Brute-force protection is the caller's rate limit (public/auth.php); a code is 1 in 1,000,000. */
+    public function verify(string $email, string $code): bool
+    {
+        $email = self::email($email);
+        $code = preg_replace('/\s+/', '', $code) ?? '';
+        if (!preg_match('/^\d{6}$/D', $code)) return false;
+        $q = $this->db->prepare('SELECT id FROM users WHERE email=? AND verified_at IS NULL');
+        $q->execute([$email]);
+        $id = $q->fetchColumn();
+        if ($id === false) return false;
         $this->db->beginTransaction();
         try {
             // DELETE RETURNING makes one-time redemption atomic even under concurrent requests.
             $q = $this->db->prepare('DELETE FROM verification_tokens WHERE token_hash=? AND expires_at>? RETURNING user_id');
-            $q->execute([hash('sha256', $raw), time()]);
+            $q->execute([hash('sha256', "$id:$code"), time()]);
             $id = $q->fetchColumn();
             $q->closeCursor();
             if ($id === false) { $this->db->rollBack(); return false; }
@@ -125,7 +183,7 @@ final class Auth
         $dummy = password_hash(bin2hex(random_bytes(32)), PASSWORD_DEFAULT);
         $valid = password_verify($password, $user ? $user['password_hash'] : $dummy);
         if (!$user || !$valid || $user['status'] !== 'active') throw new DomainException('Email or password is incorrect.');
-        if (!$user['verified_at']) throw new DomainException('Verify your email before signing in. You can request a new verification link below.');
+        if (!$user['verified_at']) throw new DomainException('Verify your email before signing in. Enter the code from your email on the verification page, or request a new code.');
         if (password_needs_rehash($user['password_hash'], PASSWORD_DEFAULT)) {
             $this->db->prepare('UPDATE users SET password_hash=? WHERE id=?')->execute([password_hash($password, PASSWORD_DEFAULT), $user['id']]);
         }

@@ -12,7 +12,13 @@
 .dash-main h1 { font-size: clamp(32px, 3.65vw, 54px); line-height: 1.08; letter-spacing: -.04em; font-weight: 500; text-wrap: balance; }
 .dash-main h2 { font-size: clamp(21px, 2vw, 26px); line-height: 1.25; font-weight: 500; letter-spacing: -.035em; }
 .dash-main h3 { font-size: 16px; line-height: 1.35; letter-spacing: -.02em; }
-.dash-intro { display: grid; grid-template-columns: 1.12fr 1fr; border-radius: 10px; overflow: hidden; background: var(--navy); color: white; }
+.dash-intro { position: relative; isolation: isolate; display: grid; grid-template-columns: 1.12fr 1fr; border-radius: 10px; overflow: hidden; background: var(--navy); color: white; }
+/* Faint blueprint grid behind the intro, drawn in CSS and faded toward the edges. */
+.dash-intro::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+    background-image: linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px);
+    background-size: 46px 46px;
+    -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 45%, #000 40%, transparent 100%);
+    mask-image: radial-gradient(ellipse 80% 70% at 50% 45%, #000 40%, transparent 100%); }
 .dash-intro-copy { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; padding: clamp(26px, 3.5vw, 54px); }
 .dash-intro-copy > p { margin-top: 16px; max-width: 50ch; color: var(--on-navy); font-size: 15px; line-height: 1.65; }
 .dash-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 22px; margin-top: 24px; }

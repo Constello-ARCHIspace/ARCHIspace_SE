@@ -36,6 +36,7 @@ function migrateAccounts(PDO $db): void {
         $db->exec(file_get_contents(__DIR__ . '/designs-schema.sql'));
         $db->exec("INSERT OR IGNORE INTO app_migrations(version,applied_at) VALUES(4,strftime('%s','now'))");
         $db->exec("INSERT OR IGNORE INTO app_migrations(version,applied_at) VALUES(5,strftime('%s','now'))");
+        $db->exec("INSERT OR IGNORE INTO app_migrations(version,applied_at) VALUES(6,strftime('%s','now'))");
         $db->exec('COMMIT');
     } catch (Throwable $e) { $db->exec('ROLLBACK'); throw $e; }
 }

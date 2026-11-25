@@ -33,7 +33,7 @@ try {
     $db = new PDO('sqlite:' . $config['database'], null, null, [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
     $db->exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
     $db->query('SELECT role,status,session_version FROM users LIMIT 0');
-    if (!$db->query('SELECT version FROM app_migrations WHERE version=4')->fetchColumn()) throw new RuntimeException('Database migration required');
+    if (!$db->query('SELECT version FROM app_migrations WHERE version=5')->fetchColumn()) throw new RuntimeException('Database migration required');
 } catch (Throwable $error) { http_response_code(503); exit('Account service unavailable. The administrator should check configuration and run php bin/migrate.php after upgrading.'); }
 $auth = new Auth($db, function(string $email, string $token) use ($config, $base): void {
     $link = $base . '/auth.php?view=verify&token=' . rawurlencode($token);
@@ -44,7 +44,7 @@ function csrfCheck(): void {
     if (!is_string($_POST['csrf'] ?? null) || !hash_equals($_SESSION['csrf'], $_POST['csrf'])) {
         http_response_code(403);
         $back = esc((string)($_SERVER['REQUEST_URI'] ?? 'auth.php'));
-        exit('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Form expired</title><h1>Your form expired.</h1><p>This usually happens when a page stays open for a long time or is opened from an old tab. Nothing was saved.</p><p><a href="' . $back . '">Reload the form</a> and try again.</p></body>');
+        exit('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Form expired | ARCHIspace</title><link rel="stylesheet" href="assets/fonts.css"><link rel="stylesheet" href="assets/theme.css"><link rel="stylesheet" href="assets/portal.css"><main class="portal-main narrow"><section class="panel"><h1>Your form expired.</h1><p>This usually happens when a page stays open for a long time or is opened from an old tab. Nothing was saved.</p><a class="button primary" href="' . $back . '">Reload the form</a></section></main></html>');
     }
 }
 function requireUser(bool $json = false): array {

@@ -36,19 +36,35 @@ final class Auth
         return $value;
     }
 
-    public function register(string $firstName, string $lastName, string $email, string $password, ?string $middleName = null): void
+    public function register(string $firstName, string $lastName, string $email, string $password, string $phone, string $birthdate, ?string $middleName = null): void
     {
         $firstName = self::namePart($firstName, 'first name', true);
         $lastName = self::namePart($lastName, 'last name', true);
         $middleName = self::namePart($middleName ?? '', 'middle name', false);
         $email = self::email($email);
+        $phone = trim($phone);
+        if (strlen($phone) > 24 || !preg_match('/^\+?[0-9 ().-]+$/D', $phone)) {
+            throw new InvalidArgumentException('Enter a phone number with 7 to 15 digits. You may include a leading +.');
+        }
+        $phone = preg_replace('/[ ().-]/', '', $phone);
+        if (!preg_match('/^\+?[0-9]{7,15}$/D', $phone)) {
+            throw new InvalidArgumentException('Enter a phone number with 7 to 15 digits.');
+        }
+        $dob = preg_match('/^\d{4}-\d{2}-\d{2}$/D', $birthdate) ? DateTimeImmutable::createFromFormat('!Y-m-d', $birthdate) : false;
+        $today = new DateTimeImmutable('today');
+        if (!$dob || $dob->format('Y-m-d') !== $birthdate || $birthdate < '1900-01-01' || $dob > $today || $dob->diff($today)->y > 120) {
+            throw new InvalidArgumentException('Enter a valid date of birth.');
+        }
+        if ($dob->diff($today)->y < 18) {
+            throw new InvalidArgumentException('You must be at least 18 years old to create an account.');
+        }
         // 72-byte ceiling prevents bcrypt truncation on PHP installations without Argon2.
         if (mb_strlen($password) < 15 || strlen($password) > 72 || str_contains($password, "\0")) {
             throw new InvalidArgumentException('Use at least 15 characters and no more than 72 bytes for your password.');
         }
         $hash = password_hash($password, PASSWORD_DEFAULT);
-        $q = $this->db->prepare('INSERT INTO users(public_id,first_name,middle_name,last_name,email,password_hash,created_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(email) DO NOTHING');
-        $q->execute([bin2hex(random_bytes(16)), $firstName, $middleName === '' ? null : $middleName, $lastName, $email, $hash, time()]);
+        $q = $this->db->prepare('INSERT INTO users(public_id,first_name,middle_name,last_name,email,phone,birthdate,password_hash,created_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(email) DO NOTHING');
+        $q->execute([bin2hex(random_bytes(16)), $firstName, $middleName === '' ? null : $middleName, $lastName, $email, $phone, $birthdate, $hash, time()]);
         // Existing registrations never overwrite a password or trigger another email.
         if ($q->rowCount() === 1) $this->sendVerification((int)$this->db->lastInsertId(), $email);
     }

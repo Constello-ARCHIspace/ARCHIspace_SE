@@ -5,7 +5,7 @@
  * The browser only talks to this server; PHP fetches each tile once from the
  * OpenStreetMap tile server and keeps it in storage/tiles for 7 days, as the
  * OSM tile usage policy asks (https://operations.osmfoundation.org/policies/tiles/).
- * The map must show "© OpenStreetMap contributors"; index.php does.
+ * The map must show "© OpenStreetMap contributors"; studio.php does.
  *
  * Optional environment variables:
  *   ARCHISPACE_TILE_DIR  cache folder (default: storage/tiles)

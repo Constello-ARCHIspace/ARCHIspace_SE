@@ -27,12 +27,15 @@ function migrateAccounts(PDO $db): void {
             'role'=>"TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('user','sub_admin','admin'))",
             'status'=>"TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','suspended'))",
             'session_version'=>'INTEGER NOT NULL DEFAULT 0',
+            'phone'=>'TEXT',
+            'birthdate'=>'TEXT',
         ] as $name=>$definition) {
             if (!in_array($name, $columns, true)) $db->exec("ALTER TABLE users ADD COLUMN $name $definition");
         }
         $db->exec(file_get_contents(__DIR__ . '/admin-schema.sql'));
         $db->exec(file_get_contents(__DIR__ . '/designs-schema.sql'));
         $db->exec("INSERT OR IGNORE INTO app_migrations(version,applied_at) VALUES(4,strftime('%s','now'))");
+        $db->exec("INSERT OR IGNORE INTO app_migrations(version,applied_at) VALUES(5,strftime('%s','now'))");
         $db->exec('COMMIT');
     } catch (Throwable $e) { $db->exec('ROLLBACK'); throw $e; }
 }

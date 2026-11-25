@@ -23,7 +23,7 @@ check(r.headers['content-security-policy'][0].includes("form-action 'self'"),'au
 let csrf=r.text.match(/name="csrf" value="([a-f0-9]+)"/)[1];
 r=await server.request({url:'/auth.php',method:'POST',body:{email:'test@example.com',password:'a password'}});
 check(r.httpStatusCode===403,'missing CSRF rejected');
-r=await server.request({url:'/index.php'});check(r.httpStatusCode===302,'designer requires login');
+r=await server.request({url:'/studio.php'});check(r.httpStatusCode===302,'designer requires login');
 for(const p of ['blueprint.php','hazard.php']){r=await server.request({url:'/'+p});check(r.httpStatusCode===401,p+' requires login');}
 r=await server.request({url:'/logout.php'});check(r.httpStatusCode===405,'GET logout forbidden');
 r=await server.request({url:'/auth.php?view=verify&token='+ 'a'.repeat(64)});check(r.httpStatusCode===303,'verification secret removed from URL');
@@ -33,12 +33,14 @@ r=await server.request({url:'/auth.php?view=verify',method:'POST',body:{csrf}});
 // Seed a test-only verified account without using SMTP.
 await php.run({code:`<?php $c=require '/app/config.php';$d=new PDO('sqlite:'.$c['database']);$q=$d->prepare('INSERT INTO users(public_id,first_name,last_name,email,password_hash,verified_at,created_at) VALUES(?,?,?,?,?,?,?)');$q->execute(['http-smoke-user','HTTP','Test','http-test@example.com',password_hash('A long test passphrase!',PASSWORD_DEFAULT),time(),time()]);`});
 r=await server.request({url:'/auth.php',method:'POST',body:{csrf,email:'http-test@example.com',password:'A long test passphrase!'}});
-check(r.httpStatusCode===303 && r.headers.location[0]==='index.php','verified HTTP login redirects');
+check(r.httpStatusCode===303 && r.headers.location[0]==='dashboard.php','verified user lands on dashboard');
 check(r.headers['set-cookie']?.length>0,'login rotates session cookie');
-r=await server.request({url:'/index.php'});check(r.httpStatusCode===200 && r.text.includes('archispace-v3-user-http-smoke-user'),'designer uses account project key');
+r=await server.request({url:'/'});check(r.httpStatusCode===302 && r.headers.location[0]==='dashboard.php','site root opens the dashboard');
+r=await server.request({url:'/index.php?tool=new'});check(r.httpStatusCode===302 && r.headers.location[0]==='studio.php?tool=new','old studio shortcuts still resolve');
+r=await server.request({url:'/studio.php'});check(r.httpStatusCode===200 && r.text.includes('archispace-v3-user-http-smoke-user'),'designer uses account project key');
 csrf=r.text.match(/name="csrf" value="([a-f0-9]+)"/)[1];
 r=await server.request({url:'/logout.php',method:'POST',body:{csrf}});check(r.httpStatusCode===303,'CSRF-protected logout succeeds');
-r=await server.request({url:'/index.php'});check(r.httpStatusCode===302,'logout revokes designer access');
+r=await server.request({url:'/studio.php'});check(r.httpStatusCode===302,'logout revokes designer access');
 console.log(n+' HTTP checks passed');
 php.exit();
 fs.rmSync(temporary,{recursive:true,force:true});

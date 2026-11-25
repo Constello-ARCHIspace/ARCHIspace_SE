@@ -3,18 +3,14 @@ declare(strict_types=1);
 require dirname(__DIR__).'/app/portal.php';
 $user=requireUser();
 if($user['role']!=='user'){header('Location: '.accountHome($user));exit;}
+$showReports = ($_GET['tab'] ?? '') === 'reports';
 
 function dashIcon(string $name): string {
     $paths=[
-        'upload'=>'<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>',
-        'layers'=>'<path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/>',
-        'sparkle'=>'<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/>',
-        'waves'=>'<path d="M3 8c3 0 3 2 6 2s3-2 6-2 3 2 6 2M3 14c3 0 3 2 6 2s3-2 6-2 3 2 6 2"/>',
-        'clipboard'=>'<path d="M9 3h6v3H9zM7 5H5v16h14V5h-2M9 12h6M9 16h6"/>',
+        'plus'=>'<path d="M12 5v14M5 12h14"/>',
         'message'=>'<path d="M4 5h16v11H9l-5 4V5z"/>',
         'download'=>'<path d="M12 4v11M7 11l5 5 5-5M4 20h16"/>',
-        'home'=>'<path d="M4 11l8-7 8 7M6 10v10h12V10"/>',
-        'arrow'=>'<path d="M8 16L16 8M9 8h7v7"/>',
+        'arrow'=>'<path d="M4 12h15m-6-6 6 6-6 6"/>',
     ];
     return '<svg class="dash-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'.($paths[$name]??'').'</svg>';
 }
@@ -25,20 +21,18 @@ function dashStatus(string $status): string {
     return '<span class="badge '.($status==='unassigned'?'amber':'').'">'.esc($label).'</span>';
 }
 
-// Own submissions, newest first. Studio designs live in the browser, so the server only knows submissions.
-$rows=[];$total=0;
+// The dashboard shows submitted snapshots. Working designs are available separately in the studio.
+$rows=[];$total=0;$submissionsAvailable=true;
 try{$list=$service->projects((int)$user['id'],'','',1,true);$rows=$list['rows'];$total=(int)$list['total'];}
-catch(Throwable $e){$rows=[];$total=0;}
-usort($rows,fn($a,$b)=>(int)$b['created_at']<=>(int)$a['created_at']);
+catch(Throwable $e){$submissionsAvailable=false;}
 $latest=$rows[0]??null;
 
-$roomCount=0;$area=0.0;$roomsJson='[]';$reviewer='Awaiting assignment';$detailOk=false;
-if($latest){
+$rooms=[];$roomCount=0;$area=0.0;$roomsJson='[]';$detailOk=false;
+if($latest && !$showReports){
     try{
         $detail=$service->project((int)$user['id'],(int)$latest['id']);
         $data=json_decode((string)$detail['state_json'],true);
         $state=is_array($data)?($data['state']??[]):[];
-        $rooms=[];
         foreach(is_array($state['rooms']??null)?$state['rooms']:[] as $r){
             if(!is_array($r))continue;
             $rooms[]=['name'=>is_string($r['name']??null)?$r['name']:'Room','x'=>(float)($r['x']??0),'z'=>(float)($r['z']??0),'w'=>(float)($r['w']??0),'d'=>(float)($r['d']??0)];
@@ -46,19 +40,17 @@ if($latest){
         $roomCount=count($rooms);
         $area=array_sum(array_map(fn($r)=>$r['w']*$r['d'],$rooms));
         $roomsJson=json_encode($rooms,JSON_THROW_ON_ERROR);
-        if(!empty($detail['reviewer_name']))$reviewer=(string)$detail['reviewer_name'];
         $detailOk=true;
     }catch(Throwable $e){$detailOk=false;}
 }
 
 // Recent activity from the latest submissions and published reviewer feedback.
-$events=[];$feedbackCount=0;
-foreach(array_slice($rows,0,5) as $p){
+$events=[];
+foreach(($showReports ? [] : array_slice($rows,0,5)) as $p){
     $events[]=['t'=>(int)$p['created_at'],'title'=>'Project submitted','text'=>(string)$p['name'].' · '.(string)$p['kind']];
     try{
         foreach($service->feedback((int)$user['id'],(int)$p['id']) as $f){
             if(($f['status']??'')!=='published')continue;
-            $feedbackCount++;
             $events[]=['t'=>(int)$f['updated_at'],'title'=>'Reviewer feedback received','text'=>(string)($f['author_name']??'Reviewer').': '.(string)($f['location']??'')];
         }
     }catch(Throwable $e){}
@@ -66,57 +58,95 @@ foreach(array_slice($rows,0,5) as $p){
 usort($events,fn($a,$b)=>$b['t']<=>$a['t']);
 $events=array_slice($events,0,4);
 
-$first=$user['first_name'];
 $initials=mb_strtoupper(mb_substr((string)$user['name'],0,2));
 ?>
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dashboard | Archispace</title><link rel="stylesheet" href="assets/fonts.css"><link rel="stylesheet" href="assets/portal.css"><link rel="stylesheet" href="assets/dashboard.css"><script src="assets/portal.js" defer></script><script src="assets/dashboard.js" defer></script></head>
-<body>
-<header class="portal-nav"><a class="brand" href="dashboard.php"><span class="brand-mark"><?= icon('imgArchispaceMark','admin') ?></span>archispace</a>
-<nav aria-label="Workspace"><a href="dashboard.php" aria-current="page">Dashboard</a><a href="projects.php">Projects</a><a href="#services">Services</a><a href="index.php" title="Open the studio and use Quick guide">Help / tutorial</a></nav>
-<div class="nav-account"><?= badge('user') ?><span class="muted-link" title="Account settings are coming soon">Account</span><form action="logout.php" method="post"><?php csrfField(); ?><button><?= icon('imgLogOut','admin') ?>Logout</button></form><span class="avatar" title="<?= esc((string)$user['name']) ?>"><?= esc($initials) ?></span></div></header>
-<main class="portal-main">
-<?php if(isset($_SESSION['portal_notice'])){echo '<div class="notice" role="status">'.esc((string)$_SESSION['portal_notice']).'</div>';unset($_SESSION['portal_notice']);} ?>
-<div class="page-heading"><div><p class="eyebrow">YOUR WORKSPACE / USER</p><h1><span id="greet-word">Welcome</span>, <?= esc($first) ?>.</h1><p>A clearer view of your projects. Continue your design, or start with a new plan.</p></div><a class="button primary" href="index.php">+ Create project</a></div>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title><?= $showReports ? 'Reports and feedback' : 'Dashboard' ?> | Archispace</title><link rel="stylesheet" href="assets/fonts.css"><link rel="stylesheet" href="assets/theme.css"><link rel="stylesheet" href="assets/portal.css"><link rel="stylesheet" href="assets/dashboard.css"><script src="assets/portal.js" defer></script><script src="assets/dashboard.js" defer></script></head>
+<body class="dashboard">
+<header class="portal-nav">
+    <a class="brand" href="dashboard.php"><span class="brand-mark"><?= icon('imgArchispaceMark','admin') ?></span>archispace</a>
+    <nav aria-label="Workspace">
+        <a href="dashboard.php"<?= $showReports ? '' : ' aria-current="page"' ?>>Dashboard</a>
+        <a href="studio.php">Design studio</a>
+        <a href="projects.php">My submissions</a>
+        <a href="dashboard.php?tab=reports"<?= $showReports ? ' aria-current="page"' : '' ?>>Reports and feedback</a>
+    </nav>
+    <div class="nav-account">
+        <span class="avatar" title="<?= esc((string)$user['name']) ?>"><?= esc($initials) ?></span>
+        <form action="logout.php" method="post"><?php csrfField(); ?><button><?= icon('imgLogOut','admin') ?>Logout</button></form>
+    </div>
+</header>
+<main class="portal-main dash-main">
+    <?php if(isset($_SESSION['portal_notice'])){echo '<div class="notice" role="status">'.esc((string)$_SESSION['portal_notice']).'</div>';unset($_SESSION['portal_notice']);} ?>
 
-<section class="dash-banner" aria-label="About the platform"><?= dashIcon('home') ?><div><h2>Your plans, brought into perspective.</h2><p>Archispace connects blueprint uploads, spatial design, optional AI and human feedback, and illustrative disaster readiness. Explore ideas before you discuss them with qualified professionals.</p></div><button type="button" data-dash-open="about-dialog">About the platform</button></section>
+    <?php if(!$showReports): ?>
+    <section class="dash-intro <?= $latest ? 'has-submission' : '' ?>" aria-labelledby="intro-heading">
+        <div class="dash-intro-copy">
+            <h1 id="intro-heading"><?= $latest ? 'Your design workspace' : 'Design your next floor plan' ?></h1>
+            <p><?= $latest ? 'Start a new project, reopen a saved design or check the feedback on your latest submission.' : 'Start with a blank site or import a blueprint. Arrange rooms in 2D and 3D, then explore how your design responds to floods and storms.' ?></p>
+            <div class="dash-actions">
+                <a class="button primary" href="studio.php?tool=new"><?= dashIcon('plus') ?>Create new project</a>
+                <a class="dash-link" href="studio.php?tool=designs">Open saved designs <?= dashIcon('arrow') ?></a>
+            </div>
+        </div>
+        <?php if(!$latest): ?>
+        <figure class="dash-example">
+            <img src="assets/coastal-retreat-plan.png" width="1072" height="592" alt="Ground-floor plan with a living room and kitchen above two bedrooms and a bathroom.">
+            <figcaption><strong>Coastal Retreat</strong><span>Example floor plan</span></figcaption>
+        </figure>
+        <?php endif; ?>
+    </section>
 
-<section class="dash-hero" aria-label="Latest project">
-<?php if($latest): ?>
-<article class="dash-project"><div class="dash-project-body">
-<div class="dash-plan-wrap"><?php if($detailOk && $roomCount>0): ?><canvas class="review-plan" width="640" height="300" data-rooms="<?= esc($roomsJson) ?>" aria-label="Layout of your latest submission"></canvas><?php else: ?><div class="dash-plan-empty">Plan preview unavailable</div><?php endif; ?></div>
-<div class="dash-details"><div class="dash-tags"><span class="badge"><?= esc(mb_strtoupper((string)$latest['kind'])) ?></span><?= dashStatus((string)$latest['status']) ?></div>
-<h2><?= esc((string)$latest['name']) ?></h2>
-<p class="dash-meta"><?php if($detailOk): ?><?= $roomCount ?> rooms · room floor area <?= number_format($area,1) ?> m²<br><?php endif; ?>Submitted <?= dateLabel($latest['created_at']) ?><br>Reviewer: <?= esc($reviewer) ?></p>
-<p class="dash-meta">Studio designs are saved in your browser. Submit one for review to see it here.</p>
-<a class="button primary" href="project.php?id=<?= (int)$latest['id'] ?>">View <?= esc((string)$latest['name']) ?> →</a></div></div>
-<div class="dash-strip"><span><?= $total ?> <?= $total===1?'submission':'submissions' ?></span><span><?= $feedbackCount ?> published feedback</span><span>Concept plan · submitted snapshot</span></div></article>
-<?php else: ?>
-<article class="dash-project dash-project-empty"><?php emptyState('No projects yet','Create a project in the studio, then submit it for review and it will appear here.'); ?></article>
-<?php endif; ?>
-<aside class="panel dash-activity"><h2>Recent activity</h2>
-<?php if(!$events): ?><p class="hint">Nothing yet. Submitting a project and receiving feedback will show up here.</p><?php endif;foreach($events as $e): ?>
-<div class="dash-event"><time class="when mono" datetime="<?= esc(gmdate('c',$e['t'])) ?>"><?= esc(gmdate('M j · H:i',$e['t'])) ?> UTC</time><strong><?= esc($e['title']) ?></strong><span><?= esc($e['text']) ?></span></div>
-<?php endforeach; ?></aside>
-</section>
+    <?php if($latest): ?>
+    <section class="dash-review" aria-labelledby="latest-title">
+        <div class="dash-section-head"><h2 id="latest-title">Latest submission</h2><a class="dash-link" href="projects.php">My submissions (<?= $total ?>) <?= dashIcon('arrow') ?></a></div>
+        <div class="dash-review-grid">
+            <article class="dash-project">
+                <div class="dash-details">
+                    <div class="dash-tags"><span><?= esc((string)$latest['kind']) ?></span><?= dashStatus((string)$latest['status']) ?></div>
+                    <h3><?= esc((string)$latest['name']) ?></h3>
+                    <p>Submitted <?= dateLabel($latest['created_at']) ?><br>Reviewer: <?= esc((string)($latest['reviewer_name'] ?: 'Awaiting assignment')) ?></p>
+                    <a class="dash-link" href="project.php?id=<?= (int)$latest['id'] ?>">View plan and feedback <?= dashIcon('arrow') ?></a>
+                </div>
+                <div class="dash-plan">
+                    <?php if($detailOk && $roomCount): ?>
+                    <canvas class="review-plan" width="640" height="300" data-rooms="<?= esc($roomsJson) ?>" role="img" aria-label="<?= esc(implode(', ',array_map(fn($r)=>$r['name'].' '.$r['w'].' by '.$r['d'].' metres',$rooms))) ?>"></canvas>
+                    <p><?= $roomCount ?> <?= $roomCount===1?'room':'rooms' ?> · <?= number_format($area,1) ?> m²</p>
+                    <?php else: ?><p>Plan preview unavailable</p><?php endif; ?>
+                </div>
+            </article>
+            <?php if($events): ?>
+            <aside class="dash-activity"><h3>Recent activity</h3>
+                <?php foreach($events as $e): ?>
+                <div class="dash-event"><strong><?= esc($e['title']) ?></strong><span><?= esc($e['text']) ?></span><time class="when" datetime="<?= esc(gmdate('c',$e['t'])) ?>"><?= esc(gmdate('M j · H:i',$e['t'])) ?> UTC</time></div>
+                <?php endforeach; ?>
+            </aside>
+            <?php endif; ?>
+        </div>
+    </section>
+    <?php endif; ?>
 
-<div class="dash-section-head"><h2>Main modules</h2><span class="hint">Your complete planning workflow</span></div>
-<section class="dash-modules" aria-label="Main modules">
-<a class="dash-card" href="index.php"><div class="dash-card-top"><?= dashIcon('upload') ?><?= dashIcon('arrow') ?></div><h3>Uploads</h3><p>Site and floor plans, organized and calibrated.</p><span class="dash-tag">Open studio</span></a>
-<a class="dash-card" href="index.php"><div class="dash-card-top"><?= dashIcon('layers') ?><?= dashIcon('arrow') ?></div><h3>Blueprint studio</h3><p>2D / 3D editing, site tools and materials.</p><span class="dash-tag">Continue design</span></a>
-<div class="dash-card is-soon" aria-disabled="true"><div class="dash-card-top"><?= dashIcon('sparkle') ?></div><h3>AI design review</h3><p>Explore suggestions and compare alternatives.</p><span class="dash-tag">Coming soon</span></div>
-<a class="dash-card" href="index.php"><div class="dash-card-top"><?= dashIcon('waves') ?><?= dashIcon('arrow') ?></div><h3>Disaster simulation</h3><p>Flood, storm and earthquake scenarios.</p><span class="dash-tag">Open studio</span></a>
-<a class="dash-card" href="index.php"><div class="dash-card-top"><?= dashIcon('clipboard') ?><?= dashIcon('arrow') ?></div><h3>Readiness reports</h3><p>Review concept estimates and next steps.</p><span class="dash-tag">Open studio</span></a>
-</section>
-
-<div class="dash-section-head" id="services"><h2>Services for your next decision</h2></div>
-<section class="dash-services" aria-label="Services">
-<a class="dash-card" href="projects.php"><div class="dash-card-top"><span class="dash-title"><?= dashIcon('message') ?>Administrator review</span></div><p>Request human architectural feedback on your own projects.</p><span class="dash-tag">Request a review →</span></a>
-<a class="dash-card" href="index.php"><div class="dash-card-top"><span class="dash-title"><?= dashIcon('download') ?>Export report</span></div><p>Share your concept estimates, assumptions and action plan.</p><span class="dash-tag">Open studio to export →</span></a>
-</section>
-
-<p class="hint dash-note">You manage your own projects and can request feedback. Readiness scores are illustrative concept estimates, not structural certification or safety guarantees.</p>
+    <?php else: ?>
+    <section class="dash-outcomes" aria-labelledby="review-title">
+        <div>
+            <h1 id="review-title">Reports and feedback</h1>
+            <p>Use the report to discuss your concept with a qualified professional.</p>
+        </div>
+        <div class="dash-outcome-list">
+            <a href="studio.php?tool=report"><?= dashIcon('download') ?><div><h3>Export a readiness report</h3><p>Print or save a PDF of your floor plans and concept estimates.</p></div><?= dashIcon('arrow') ?></a>
+            <a href="studio.php?tool=review"><?= dashIcon('message') ?><div><h3>Ask a reviewer for feedback</h3><p>Share a snapshot of your design and tell the reviewer what to look at.</p></div><?= dashIcon('arrow') ?></a>
+            <?php if(!$latest && $submissionsAvailable): ?>
+            <div class="dash-submission-note">
+                <strong>No submissions yet.</strong> After you submit, you can track feedback in <a href="projects.php">My submissions</a>.
+            </div>
+            <?php endif; ?>
+        </div>
+    </section>
+    <?php endif; ?>
+    <?php if(!$submissionsAvailable): ?>
+    <p class="notice" role="status">We couldn’t load your submissions. <a href="<?= $showReports ? 'dashboard.php?tab=reports' : 'dashboard.php' ?>">Try again</a>.</p>
+    <?php endif; ?>
 </main>
-<dialog id="about-dialog"><div class="section-heading"><h2>About Archispace</h2><button type="button" data-dash-close aria-label="Close">×</button></div><p>Archispace is a concept-planning workspace. Bring in blueprints, shape a design in 2D and 3D, and review illustrative flood, storm and earthquake readiness.</p><p class="hint">Concept design tool. Not construction-ready CAD. Verify dimensions, structure, drainage and local codes with qualified professionals.</p></dialog>
-<footer class="portal-footer"><span>ARCHISPACE / CONCEPT PLANNING</span><span>Logout returns to Log in · Help can reopen the tutorial</span><span>WORKSPACE / V.01</span></footer>
+<footer class="portal-footer dash-footer"><span>Archispace · Concept planning</span><a href="studio.php?tool=guide">Quick guide</a><button type="button" data-open="about-dialog">About Archispace</button></footer>
+<dialog id="about-dialog" aria-labelledby="about-title"><div class="section-heading"><h2 id="about-title">About Archispace</h2><button type="button" data-close="about-dialog" aria-label="Close">×</button></div><p>Design a floor plan, explore site conditions and compare flood, storm and earthquake scenarios. Save working designs in My designs, and submit a copy when you want human feedback.</p><p>Readiness reports give illustrative estimates. Ask qualified professionals to verify dimensions, structure, drainage and local code requirements before construction.</p></dialog>
 </body></html>

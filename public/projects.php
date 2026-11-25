@@ -5,7 +5,7 @@ $user=requireUser();
 try{$list=$service->projects((int)$user['id'],'','',integerInput($_GET,'page',1),true);}catch(InvalidArgumentException $e){http_response_code(400);exit('Invalid page.');}
 portalHeader('My submissions',$user);
 ?>
-<div class="page-heading"><div><p class="eyebrow">YOUR WORKSPACE / HUMAN REVIEW</p><h1>My submissions.</h1><p>Submit a design snapshot and read feedback from your assigned reviewer.</p></div><a class="button" href="index.php">Back to studio</a></div>
+<div class="page-heading"><div><p class="eyebrow">YOUR WORKSPACE / HUMAN REVIEW</p><h1>My submissions.</h1><p>Submit a design snapshot and read feedback from your assigned reviewer.</p></div><a class="button" href="studio.php">Back to studio</a></div>
 <div class="management-grid"><section class="panel"><h2>Submitted designs</h2><p class="hint">Each submission is a separate snapshot. Later studio changes do not overwrite it.</p>
 <?php if(!$list['rows'])emptyState('No submissions yet','Use Submit for review in the studio, or upload an exported ARCHIspace JSON file.');foreach($list['rows'] as $project): ?>
 <a class="queue-card" href="project.php?id=<?= (int)$project['id'] ?>"><?= badge($project['status']) ?><h3><?= esc($project['name']) ?></h3><p><?= esc($project['kind']) ?> · <?= dateLabel($project['created_at']) ?></p><small>View plan and feedback →</small></a>

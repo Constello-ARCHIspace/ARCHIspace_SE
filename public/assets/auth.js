@@ -1,3 +1,31 @@
+const birthdate = document.getElementById('birthdate');
+if (birthdate) {
+  const age = document.getElementById('age');
+  const updateAge = () => {
+    const value = birthdate.value;
+    const today = birthdate.max;
+    const years = value ? Number(today.slice(0, 4)) - Number(value.slice(0, 4)) - Number(today.slice(5) < value.slice(5)) : null;
+    age.value = years !== null && years >= 0 ? String(years) : '—';
+    let message = '';
+    if (years !== null && (years < 0 || years > 120)) message = 'Enter a valid date of birth.';
+    else if (years !== null && years < 18) message = 'You must be at least 18 years old to create an account.';
+    birthdate.setCustomValidity(message);
+  };
+  birthdate.addEventListener('input', updateAge);
+  updateAge();
+}
+const phone = document.getElementById('phone');
+if (phone) {
+  const checkPhone = () => {
+    const raw = phone.value.trim();
+    const digits = raw.replace(/\D/g, '');
+    const valid = /^\+?[0-9 ().-]+$/.test(raw) && digits.length >= 7 && digits.length <= 15;
+    phone.setCustomValidity(raw && !valid ? 'Enter a phone number with 7 to 15 digits. You may include a leading +.' : '');
+  };
+  phone.addEventListener('input', checkPhone);
+  checkPhone();
+}
+
 document.querySelectorAll('[data-toggle]').forEach(button => {
   const original = button.textContent;
   button.addEventListener('click', () => {
@@ -25,7 +53,7 @@ document.getElementById('closeHelp')?.addEventListener('click', () => help.close
   const bytes = s => new TextEncoder().encode(s).length;
   const update = () => {
     const n = [...pw.value].length, b = bytes(pw.value);
-    count.textContent = b > 72 ? `${n} characters: too long (over 72 bytes)` : n >= 15 ? `${n} characters ✓` : `${n} of 15 characters`;
+    count.textContent = !n ? '' : b > 72 ? `${n} characters: too long (over 72 bytes)` : n >= 15 ? `${n} characters ✓` : `${n} of 15 characters`;
     count.className = 'pw-status ' + (n >= 15 && b <= 72 ? 'ok' : 'bad');
     if (!confirmation.value) { match.textContent = ''; match.className = 'hint pw-status'; return; }
     const same = pw.value === confirmation.value;

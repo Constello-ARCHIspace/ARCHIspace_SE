@@ -2,22 +2,42 @@ const q = s => document.querySelector(s);
 function showPanel(tab, selector) {
   q(`[data-tab="${tab}"]`)?.click();
   q('#left')?.classList.add('open');
-  if (selector) q(selector)?.closest('.sect')?.scrollIntoView({block:'start',behavior:'smooth'});
+  const section = selector && q(selector)?.closest('details.sect');
+  if (section) {
+    section.open = true;
+    section.scrollIntoView({block:'start'});
+  }
 }
-document.querySelectorAll('[data-step]').forEach(button => button.addEventListener('click', () => {
+function selectPlanningStep(button, chooseFile) {
   document.querySelectorAll('[data-step]').forEach(b => {b.classList.toggle('active',b===button); if(b===button)b.setAttribute('aria-current','step');else b.removeAttribute('aria-current');});
   switch (button.dataset.step) {
-    case 'blueprint': showPanel('site','#bpDropzone'); q('#bpFileInput')?.click(); break;
+    case 'blueprint': showPanel('site','#bpDropzone'); if (chooseFile) q('#bpFileInput')?.click(); break;
     case 'design': showPanel('site','[data-s="site.hills"]'); break;
-    case 'simulate': showPanel('env','[data-s="env.hour"]'); break;
+    case 'simulate': showPanel('env','#simBtn'); break;
     case 'readiness': showPanel('env','#readinessBtn');q('#readinessBtn')?.click();break;
   }
-}));
-document.querySelectorAll('[data-focus]').forEach(button => button.addEventListener('click', () => {
-  document.querySelectorAll('[data-focus]').forEach(b => b.classList.toggle('selected', b===button));
-  const destinations={terrain:['site','[data-s="site.hills"]'],river:['site','#riverBtn'],landscape:['build','#objPalette'],furniture:['build','#objPalette']};
-  showPanel(...destinations[button.dataset.focus]);
-}));
+}
+document.querySelectorAll('[data-step]').forEach(button => button.addEventListener('click', () => selectPlanningStep(button, true)));
+const actionBar = q('.studio-actions');
+for (const menu of actionBar.querySelectorAll('details')) menu.name = 'studio-actions';
+actionBar.addEventListener('click', event => {
+  const item = event.target.closest('.menu-list button, .menu-list a');
+  if (!item) return;
+  const menu = item.closest('details');
+  menu.open = false;
+  menu.querySelector('summary').focus();
+}, true);
+document.addEventListener('click', event => {
+  const menu = actionBar.querySelector('details[open]');
+  if (menu && !menu.contains(event.target)) menu.open = false;
+});
+actionBar.addEventListener('keydown', event => {
+  const menu = actionBar.querySelector('details[open]');
+  if (event.key === 'Escape' && menu) {
+    menu.open = false;
+    menu.querySelector('summary').focus();
+  }
+});
 q('#quickGuide')?.addEventListener('click',()=>q('#studioGuide').showModal());
 q('#closeStudioGuide')?.addEventListener('click',()=>q('#studioGuide').close());
 function positionPanels(){const top=q('.app')?.getBoundingClientRect().top;if(top!==undefined)document.documentElement.style.setProperty('--studio-top',`${top}px`);}
@@ -34,7 +54,7 @@ const TOUR=[
  {sel:'#lmSearch',tab:'site',title:'Place your lot',text:'In Site, search for the address or click the map to put the lot pin where the lot is, then turn the lot until it lines up with the street.'},
  {sel:'#fetchHazard',tab:'site',title:'Check hazards',text:'Check location looks up Project NOAH flood, landslide and storm-surge levels at the pin and within 500 m.'},
  {sel:'#readinessBtn',tab:'env',title:'Readiness and simulation',text:'In Environment, run the readiness report and the simulation. Mapped hazards at the lot lower the score.'},
- {sel:'#saveBtn',title:'Save and open',text:'Save keeps the design in your account (Ctrl+S). Open lists your saved designs and their versions.'},
+ {sel:'#saveBtn',title:'Save and open',text:'Save keeps the design in your account (Ctrl+S). Choose Workspace → Open saved designs to find earlier work and its versions.'},
  {sel:'#exportMenu',title:'Export',text:'Download the project file, a picture of the current view, or a printable readiness report you can save as PDF.'},
  {sel:'#quickGuide',title:'You are ready',text:'Quick guide has the planning steps and can start this tour again. This is concept planning, not structural certification.'}
 ];
@@ -62,7 +82,7 @@ function tourPlace(){
  card.style.left=Math.min(Math.max(8,x),W-cw-8)+'px';card.style.top=Math.min(Math.max(8,y),H-ch-8)+'px'}
 function tourGo(i){
  if(i<0||i>=TOUR.length)return;tourAt=i;const s=TOUR[i],{card}=tourEls;
- if(s.tab)showPanel(s.tab);else q('#left')?.classList.remove('open');// on small screens the tools drawer slides in or out
+ if(s.tab)showPanel(s.tab,s.sel);else q('#left')?.classList.remove('open');// on small screens the tools drawer slides in or out
  const el=s.sel&&q(s.sel);if(el)el.scrollIntoView({block:'center',inline:'nearest'});
  card.querySelector('#tourCount').textContent=(i+1)+' of '+TOUR.length;card.querySelector('#tourTitle').textContent=s.title;card.querySelector('#tourText').textContent=s.text;
  card.querySelector('#tourPrev').hidden=i===0;card.querySelector('#tourNext').textContent=i===TOUR.length-1?'Finish':'Next';
@@ -82,5 +102,26 @@ document.addEventListener('keydown',e=>{if(tourAt<0)return;
  e.stopPropagation()},true);
 addEventListener('resize',tourPlace);document.addEventListener('scroll',tourPlace,true);
 q('#startTour')?.addEventListener('click',tourStart);
-// First visit: wait for the studio to finish starting, and do not open over another window.
-if(!tourSeen())setTimeout(()=>{if(tourSeen()||document.querySelector('dialog[open],.modal.open'))return;tourStart()},900);
+function openDashboardTool() {
+  const url = new URL(location.href);
+  const tool = url.searchParams.get('tool');
+  if (!tool || url.searchParams.has('submission')) return false;
+  const step = Array.from(document.querySelectorAll('[data-step]')).find(button => button.dataset.step === tool);
+  if (step) {
+    selectPlanningStep(step, false);
+  } else {
+    switch (tool) {
+      case 'new': q('#newProjectDialog').showModal(); break;
+      case 'designs': q('#loadBtn').click(); break;
+      case 'guide': q('#quickGuide').click(); break;
+      case 'report': q('#exportReport').click(); break;
+      case 'review': q('#submitReviewBtn').click(); break;
+      default: return false;
+    }
+  }
+  url.searchParams.delete('tool');
+  history.replaceState(history.state, '', url);
+  return true;
+}
+// An explicit dashboard action gets the first screen; the tour stays available from Quick guide.
+if(!openDashboardTool()&&!tourSeen())setTimeout(()=>{if(tourSeen()||document.querySelector('dialog[open],.modal.open'))return;tourStart()},900);

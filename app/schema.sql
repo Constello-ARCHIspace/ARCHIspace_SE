@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS users (
  last_name TEXT NOT NULL,
  name TEXT GENERATED ALWAYS AS (trim(first_name || ' ' || coalesce(nullif(middle_name, '') || ' ', '') || last_name)) VIRTUAL,
  email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+ phone TEXT,
+ birthdate TEXT,
  password_hash TEXT NOT NULL,
  role TEXT NOT NULL DEFAULT 'user' CHECK(role IN ('user','sub_admin','admin')),
  status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','suspended')),

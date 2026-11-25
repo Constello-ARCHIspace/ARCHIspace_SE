@@ -12,17 +12,19 @@ if ($view === 'verify' && isset($_GET['token'])) {
 }
 if (isset($_SESSION['user_id']) && $view !== 'verify') { header('Location: ' . accountHome(requireUser())); exit; }
 $error = ''; $message = $_SESSION['notice'] ?? ''; unset($_SESSION['notice']);
-$email = ''; $firstName = ''; $middleName = ''; $lastName = '';
+$email = ''; $firstName = ''; $middleName = ''; $lastName = ''; $birthdate = ''; $phone = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrfCheck();
     try {
-        foreach (['email','first_name','middle_name','last_name','password','confirmation'] as $key) {
+        foreach (['email','first_name','middle_name','last_name','phone','birthdate','password','confirmation'] as $key) {
             if (isset($_POST[$key]) && !is_string($_POST[$key])) throw new InvalidArgumentException('Invalid form input.');
         }
         $email = trim($_POST['email'] ?? '');
         $firstName = $_POST['first_name'] ?? '';
         $middleName = $_POST['middle_name'] ?? '';
         $lastName = $_POST['last_name'] ?? '';
+        $phone = $_POST['phone'] ?? '';
+        $birthdate = $_POST['birthdate'] ?? '';
         $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown'; // Never trust client-provided proxy headers.
         $auth->limit('ip:' . $view . ':' . $ip, $view === 'login' ? 30 : 10, 900);
         if ($view !== 'verify') {
@@ -31,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($view === 'register') {
             if (($_POST['password'] ?? '') !== ($_POST['confirmation'] ?? '')) throw new InvalidArgumentException('Passwords do not match.');
-            $auth->register($firstName, $lastName, $email, $_POST['password'] ?? '', $middleName);
+            $auth->register($firstName, $lastName, $email, $_POST['password'] ?? '', $phone, $birthdate, $middleName);
             $_SESSION['notice'] = 'If this address is eligible, a verification email has been sent. Check your inbox and spam folder. Already registered? Sign in or resend verification.';
             header('Location: auth.php?view=resend', true, 303); exit;
         } elseif ($view === 'resend') {
@@ -62,36 +64,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         http_response_code(503);
     }
 }
-$titles = ['login'=>'Welcome back.', 'register'=>'Create your workspace.', 'resend'=>'Check your inbox.', 'verify'=>'One step closer.'];
-$subtitles = ['login'=>'Pick up where your last idea left off.', 'register'=>'A place to explore, review and refine your ideas.', 'resend'=>'Enter your email to request a new verification link.', 'verify'=>'Confirm your email address to activate your account.'];
+$titles = ['login'=>'Sign in to ARCHIspace', 'register'=>'Create your account', 'resend'=>'Resend verification email', 'verify'=>'Verify your email'];
+$subtitles = ['login'=>'Enter your account details to open your workspace.', 'register'=>'Use an email address you can verify to start planning.', 'resend'=>'Enter the email address you used to create your account.', 'verify'=>'Confirm your email address to activate your account.'];
 ?>
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title><?= esc($titles[$view]) ?> | ARCHIspace</title><link rel="stylesheet" href="assets/fonts.css"><link rel="stylesheet" href="assets/auth.css"><script src="assets/auth.js" defer></script></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title><?= esc($titles[$view]) ?> | ARCHIspace</title><link rel="stylesheet" href="assets/fonts.css"><link rel="stylesheet" href="assets/theme.css"><link rel="stylesheet" href="assets/auth.css"><script src="assets/auth.js" defer></script><script defer src="assets/vendor/three.min.js"></script><script defer src="assets/vendor/gsap.min.js"></script><script defer src="assets/auth-scene.js"></script></head>
 <body><main class="shell">
 <?php require dirname(__DIR__) . '/app/auth-story.php'; ?>
 <section class="form-panel <?= $view === 'register' ? 'registration' : '' ?>">
-<nav class="account-nav" aria-label="Account navigation"><span><?= $view === 'login' ? 'New to Archispace?' : 'Already have an account?' ?></span><a class="outline-button" href="<?= $view === 'login' ? 'auth.php?view=register' : 'auth.php' ?>"><?= $view === 'login' ? 'Create an account' : 'Log in' ?></a></nav>
-<div class="form-wrap"><div class="form-heading"><p class="eyebrow"><?= $view === 'register' ? 'START WITH A BETTER PLAN' : 'YOUR ARCHITECTURAL WORKSPACE' ?></p><h1><?= esc($titles[$view]) ?></h1><p class="intro"><?= esc($subtitles[$view]) ?></p></div>
+<div class="form-wrap">
+<?php if ($view === 'login' || $view === 'register'): ?>
+<nav class="account-nav" aria-label="Account access">
+    <a href="auth.php" <?= $view === 'login' ? 'aria-current="page"' : '' ?>>Log in</a>
+    <a href="auth.php?view=register" <?= $view === 'register' ? 'aria-current="page"' : '' ?>>Create account</a>
+</nav>
+<?php endif; ?>
+<div class="form-heading"><h1><?= esc($titles[$view]) ?></h1><p class="intro"><?= esc($subtitles[$view]) ?></p></div>
 <?php if ($error): ?><div class="notice error" role="alert"><?= esc($error) ?></div><?php endif; ?>
 <?php if ($message): ?><div class="notice" role="status"><?= esc($message) ?></div><?php endif; ?>
 <form method="post" action="auth.php?view=<?= esc($view) ?>"><input type="hidden" name="csrf" value="<?= esc($_SESSION['csrf']) ?>">
 <?php if ($view === 'register'): ?>
+<div class="name-row">
 <div class="field"><label for="first_name">First name</label><input id="first_name" name="first_name" autocomplete="given-name" maxlength="80" value="<?= esc($firstName) ?>" required></div>
-<div class="field"><label for="middle_name">Middle name (optional)</label><input id="middle_name" name="middle_name" autocomplete="additional-name" maxlength="80" value="<?= esc($middleName) ?>"></div>
 <div class="field"><label for="last_name">Last name</label><input id="last_name" name="last_name" autocomplete="family-name" maxlength="80" value="<?= esc($lastName) ?>" required></div>
+</div>
+<div class="field"><label for="middle_name">Middle name <span>(optional)</span></label><input id="middle_name" name="middle_name" autocomplete="additional-name" maxlength="80" value="<?= esc($middleName) ?>"></div>
+<div class="birth-row">
+    <div class="field"><label for="birthdate">Date of birth</label><input type="date" id="birthdate" name="birthdate" autocomplete="bday" min="1900-01-01" max="<?= date('Y-m-d') ?>" value="<?= esc($birthdate) ?>" required aria-describedby="age-help"></div>
+    <div class="field"><label for="age">Age</label><output id="age" for="birthdate" aria-live="polite">—</output></div>
+</div>
+<p class="hint" id="age-help">You must be at least 18 to create an account.</p>
 <?php endif; ?>
 <?php if ($view !== 'verify'): ?><div class="field"><label for="email">Email address</label><input id="email" type="email" name="email" autocomplete="email" maxlength="254" placeholder="you@example.com" value="<?= esc($email) ?>" required></div><?php endif; ?>
-<?php if (in_array($view, ['login','register'], true)): ?><div class="field"><label for="password">Password</label><div class="password-field"><input id="password" type="password" name="password" autocomplete="<?= $view === 'register' ? 'new-password' : 'current-password' ?>" <?= $view === 'register' ? 'minlength="15" aria-describedby="password-help"' : '' ?> required><button type="button" class="reveal" data-toggle="password" aria-label="Show password" aria-pressed="false"><?= $view === 'login' ? 'Show password' : 'Show' ?></button></div></div>
-<?php if ($view === 'register'): ?><p id="password-help" class="hint">Use at least 15 characters, up to 72 bytes. A memorable passphrase works well. <span id="password-count" class="pw-status" aria-live="polite"></span></p><div class="field"><label for="confirmation">Confirm password</label><div class="password-field"><input id="confirmation" type="password" name="confirmation" autocomplete="new-password" required><button type="button" class="reveal" data-toggle="confirmation" aria-label="Show confirmation password" aria-pressed="false">Show</button></div><p id="password-match" class="hint pw-status" aria-live="polite"></p></div>
-<div class="account-note"><span>USER ACCOUNT</span><p>Create your own planning workspace. Verify your email before your first login.</p></div>
-<?php else: ?><div class="login-options"><span class="session-note">Private account access</span><a href="auth.php?view=resend">Resend verification email</a></div><?php endif; ?>
+<?php if ($view === 'register'): ?>
+<div class="field"><label for="phone">Phone number</label><input type="tel" id="phone" name="phone" autocomplete="tel" maxlength="24" placeholder="0917 123 4567" value="<?= esc($phone) ?>" required></div>
 <?php endif; ?>
-<button class="submit" type="submit"><img src="assets/figma/login-imgArrowRight.svg" alt=""><span><?= ['login'=>'Log in', 'register'=>'Create account', 'resend'=>'Send verification link', 'verify'=>'Verify my email'][$view] ?></span></button></form>
-<?php if ($view === 'login'): ?><p class="guidance"><img src="assets/figma/login-imgCornerDownRight.svg" alt="">Return straight to your design workspace after signing in.</p><p class="account-info">Use your verified account to access your workspace. Your house plans are saved in this browser; blueprint images are stored on the server.</p>
-<?php elseif ($view === 'register'): ?><p class="hint next-step">Next: verify your email, then start planning your space.</p>
+<?php if (in_array($view, ['login','register'], true)): ?><div class="field"><label for="password">Password</label><div class="password-field"><input id="password" type="password" name="password" autocomplete="<?= $view === 'register' ? 'new-password' : 'current-password' ?>" <?= $view === 'register' ? 'minlength="15" aria-describedby="password-help"' : '' ?> required><button type="button" class="reveal" data-toggle="password" aria-label="Show password" aria-pressed="false"><?= $view === 'login' ? 'Show password' : 'Show' ?></button></div></div>
+<?php if ($view === 'register'): ?><p id="password-help" class="hint">Use at least 15 characters, up to 72 bytes. <span id="password-count" class="pw-status" aria-live="polite"></span></p><div class="field"><label for="confirmation">Confirm password</label><div class="password-field"><input id="confirmation" type="password" name="confirmation" autocomplete="new-password" aria-describedby="password-match" required><button type="button" class="reveal" data-toggle="confirmation" aria-label="Show confirmation password" aria-pressed="false">Show</button></div><p id="password-match" class="hint pw-status" aria-live="polite"></p></div>
+<?php endif; ?>
+<?php endif; ?>
+<button class="submit" type="submit"><span><?= ['login'=>'Log in', 'register'=>'Create account', 'resend'=>'Send verification link', 'verify'=>'Verify my email'][$view] ?></span><img width="16" height="16" src="assets/figma/login-imgArrowRight.svg" alt=""></button></form>
+<?php if ($view === 'login'): ?><p class="return-link"><a href="auth.php?view=resend">Resend verification email</a></p>
+<?php elseif ($view === 'register'): ?><p class="next-step">We’ll email you a verification link before your first login.</p>
 <?php else: ?><p class="return-link"><a href="auth.php">Back to log in</a><?php if ($view === 'verify'): ?> · <a href="auth.php?view=resend">Request a new link</a><?php endif; ?></p><?php endif; ?>
 </div>
 <footer class="account-footer"><span>© <?= date('Y') ?> Archispace</span><button type="button" id="accountHelp">Privacy &amp; help</button></footer>
 </section></main>
-<dialog id="helpDialog"><div class="dialog-heading"><h2>Your account &amp; privacy</h2><button type="button" id="closeHelp" aria-label="Close help">×</button></div><p>ARCHIspace stores your name, email, hashed password, and verification status on the server. Working plans stay in this browser. Submitted review snapshots and uploaded blueprint images are stored on the server. Admins and assigned reviewers can access submitted designs.</p><p>Email links expire after one hour. Use “Resend verification email” if you need a new link. Your session ends after 30 minutes of inactivity or 8 hours in total.</p><p>This concept-planning tool does not replace professional architecture or engineering advice. For account assistance, contact your project administrator.</p></dialog>
+<dialog id="helpDialog"><div class="dialog-heading"><h2>Your account &amp; privacy</h2><button type="button" id="closeHelp" aria-label="Close help">×</button></div><p>ARCHIspace stores your name, email, phone number, date of birth, hashed password, and verification status on the server. Working plans stay in this browser. Submitted review snapshots and uploaded blueprint images are stored on the server. Admins and assigned reviewers can access submitted designs.</p><p>Email links expire after one hour. Use “Resend verification email” if you need a new link. Your session ends after 30 minutes of inactivity or 8 hours in total.</p><p>This concept-planning tool does not replace professional architecture or engineering advice. For account assistance, contact your project administrator.</p></dialog>
 </body></html>

@@ -1,0 +1,22 @@
+/* Shared by the account, workspace, review and studio screens. */
+:root {
+  color-scheme: light;
+  --navy: #0b1a2e;
+  --navy-hover: #173052;
+  --on-navy: #c9d5e4;
+  --surface: #fff;
+  --workspace: #eef2f6;
+  --surface-soft: #f7f9fb;
+  --text-primary: #0f1f35;
+  --text-secondary: #46566c;
+  --text-muted: #58697e;
+  --divider: #e2e7ee;
+  --control-border: #bdc9d6;
+  --action: #0b766e;
+  --action-hover: #095f59;
+  --action-soft: #e8f6f4;
+  --focus: #0c8278;
+  --focus-on-navy: #5ee2d2;
+  --gold: #e0b45a;
+}
+::selection { background: #bde9e3; color: var(--navy); }

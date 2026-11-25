@@ -14,7 +14,7 @@ let n=0;const check=(v,label)=>{if(!v)throw Error('FAIL: '+label);n++;console.lo
 const clients=Array.from({length:5},()=>new PHPRequestHandler({php,documentRoot:'/app/public',absoluteUrl:'http://localhost:8000'}));
 const csrf=r=>{const m=r.text.match(/name="csrf" value="([a-f0-9]+)"/);if(!m)throw Error('Missing CSRF: '+r.text.slice(0,300));return m[1]};
 let r=await clients[4].request({url:'/admin.php'});check(r.httpStatusCode===302,'anonymous admin access redirects to login');
-for(let i=0;i<4;i++){r=await clients[i].request({url:'/auth.php'});r=await clients[i].request({url:'/auth.php',method:'POST',body:{csrf:csrf(r),email:`user${i+1}@example.com`,password:'A long testing password!'}});check(r.httpStatusCode===303&&r.headers.location[0]===['admin.php','subadmin.php','index.php','index.php'][i],'login routes role '+(i+1));}
+for(let i=0;i<4;i++){r=await clients[i].request({url:'/auth.php'});r=await clients[i].request({url:'/auth.php',method:'POST',body:{csrf:csrf(r),email:`user${i+1}@example.com`,password:'A long testing password!'}});check(r.httpStatusCode===303&&r.headers.location[0]===['admin.php','subadmin.php','dashboard.php','dashboard.php'][i],'login routes role '+(i+1));}
 r=await clients[2].request({url:'/admin.php'});check(r.httpStatusCode===403,'user cannot open admin dashboard');
 r=await clients[1].request({url:'/admin.php'});check(r.httpStatusCode===403,'sub-admin cannot open admin dashboard');
 r=await clients[0].request({url:'/admin.php'});check(r.httpStatusCode===200&&r.text.includes('No projects in this queue'),'admin empty state renders real counts');let adminCsrf=csrf(r);
@@ -52,6 +52,6 @@ r=await clients[2].request({url:'/invite.php?token='+token});check(r.httpStatusC
 r=await clients[2].request({url:'/invite.php'});check(r.httpStatusCode===200&&r.text.includes('Accept invitation'),'invitation requires explicit confirmation');
 r=await clients[2].request({url:'/invite.php',method:'POST',body:{csrf:csrf(r)}});check(r.httpStatusCode===303,'verified owner accepts invitation with CSRF');
 // Public registration ignores privilege fields even when SMTP is unavailable in this test environment.
-r=await clients[4].request({url:'/auth.php?view=register'});r=await clients[4].request({url:'/auth.php?view=register',method:'POST',body:{csrf:csrf(r),first_name:'Public',last_name:'applicant',email:'applicant@example.com',password:'A long testing password!',confirmation:'A long testing password!',role:'admin',verified_at:'1',status:'active'}});
+r=await clients[4].request({url:'/auth.php?view=register'});r=await clients[4].request({url:'/auth.php?view=register',method:'POST',body:{csrf:csrf(r),first_name:'Public',last_name:'applicant',phone:'09171234567',birthdate:'1990-06-15',email:'applicant@example.com',password:'A long testing password!',confirmation:'A long testing password!',role:'admin',verified_at:'1',status:'active'}});
 check(await run(db+"echo $d->query(\"SELECT role || ':' || (verified_at IS NULL) FROM users WHERE email='applicant@example.com'\")->fetchColumn();")==='user:1','public registration cannot grant staff or verified status');
 console.log(n+' admin HTTP checks passed');php.exit();fs.rmSync(temp,{recursive:true,force:true});

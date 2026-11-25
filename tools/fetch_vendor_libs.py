@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Download the studio's JavaScript libraries into public/assets/vendor/ so the
-studio no longer depends on outside CDNs at runtime.
+"""Download the studio and auth page libraries into public/assets/vendor/.
 
 Run once from the repository root:   python3 -I tools/fetch_vendor_libs.py
 Each file is checked against its published size and SHA-256 (jsDelivr) before it
-is saved. Commit the three files afterwards.
+is saved.
 """
 import base64, hashlib, pathlib, sys, urllib.request
 
 LIBS = [  # (url, saved as, size in bytes, sha256 base64 from data.jsdelivr.com)
+    ('https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js', 'gsap.min.js', 72214,
+     'KAM+RJox68w5blvosTtjFSvwMJQoj7WGcDQyGSe84Ic='),
     ('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js', 'three.min.js', 669884,
      'FwxnifQyF8lrMXD0tC+v4TXef3zUhJekIY+XV+4dSfo='),
     ('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js', 'pdf.min.js', 320004,
@@ -22,7 +23,7 @@ def sha(data):
 
 def main():
     root = pathlib.Path.cwd()
-    if not (root / 'public' / 'index.php').is_file():
+    if not (root / 'public' / 'studio.php').is_file():
         sys.exit('Run this from the repository root (the folder that contains public/).')
     out = root / 'public' / 'assets' / 'vendor'
     out.mkdir(parents=True, exist_ok=True)

@@ -10,7 +10,7 @@ Requirements: PHP 8.2+, Composer 2, PDO SQLite (SQLite 3.35+), mbstring and Open
 2. Copy `config.example.php` to `config.php`; enter the SMTP host, port, username, app password and sender. Use port 587 with `tls` or 465 with `ssl` as your provider requires. Do not disable TLS certificate validation.
 3. Run `php bin/init.php` to create the private account database.
 4. Run `php -S localhost:8000 -t public`.
-5. Open `http://localhost:8000/auth.php`, register, open the email link, click **Verify my email**, then sign in.
+5. Open `http://localhost:8000/`, register, open the email link, click **Verify my email**, then sign in. Standard users land on the dashboard. Choose **Design studio** to open `studio.php`.
 
 Do not put secrets in the browser, JavaScript, Git or the chat. The package intentionally excludes configured credentials and Composer vendor files; Composer installs the real PHPMailer dependency.
 

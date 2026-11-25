@@ -1,1 +1,19 @@
-<aside class="story"><a class="brand" href="auth.php" aria-label="Archispace home"><span class="brand-symbol"><img src="assets/figma/login-imgArchispaceMark.svg" alt=""></span>archispace</a><div class="story-copy"><p class="eyebrow">A CLEARER PERSPECTIVE / FROM THE FIRST PLAN</p><h2>Thoughtful spaces.<br>Better-informed plans.</h2><p>Bring your blueprints, spatial ideas and disaster readiness into one considered workspace.</p></div><div class="blueprint" role="img" aria-label="Illustrative five-room ground floor blueprint of Willow Creek House"><span class="north">↑ N</span><span class="dimension">12 400</span><div class="dimension-line"></div><div class="plan-room bedroom-one"><span>BEDROOM 01<br>16.2 m²</span></div><div class="plan-room bath"><span>BATH<br>7.4 m²</span></div><div class="plan-room bedroom-two"><span>BEDROOM 02<br>14.8 m²</span></div><div class="plan-room kitchen"><span>KITCHEN<br>18.6 m²</span></div><div class="plan-room living"><span>LIVING / DINING<br>34.5 m²</span></div><div class="furnishing furnishing-0"></div><div class="furnishing furnishing-1"></div><div class="furnishing furnishing-2"></div><div class="furnishing furnishing-3"></div><div class="furnishing furnishing-4"></div><div class="furnishing furnishing-5"></div><span class="entry-swing"><img src="assets/figma/login-imgEntrySwing.svg" alt=""></span><span class="plan-caption">GROUND FLOOR PLAN / 1:100</span></div><div class="drawing-meta"><span>WILLOW CREEK HOUSE</span><span>91.5 m² / METRIC</span></div><p class="story-disclaimer">Made for concept planning. Real-world decisions belong with qualified architecture and engineering professionals.</p></aside>
+<aside class="story" aria-label="About ARCHIspace">
+    <a class="brand" href="auth.php" aria-label="ARCHIspace home">
+        <img src="assets/figma/login-imgArchispaceMark.svg" width="32" height="32" alt="">
+        ARCHIspace
+    </a>
+    <div class="story-heading">
+        <h2>Dream it. Design it.<br><span>Build it.</span></h2>
+    </div>
+    <figure class="model house-scene" aria-label="A floor plan becoming a two-storey house">
+        <img class="scene-poster" src="assets/auth-house.webp" width="909" height="490" alt="A completed two-storey house on a drafting grid.">
+        <canvas aria-hidden="true"></canvas>
+        <figcaption class="scene-controls">
+            <span class="stage-steps" aria-hidden="true"><?php for ($step = 1; $step <= 5; $step++): ?><i class="stage-step <?= $step === 5 ? 'active' : 'done' ?>"></i><?php endfor; ?></span>
+            <span class="stage-label"><b>05</b> <span>Finishing</span></span>
+            <button type="button" class="scene-toggle" hidden>Pause</button>
+        </figcaption>
+    </figure>
+    <p class="story-description">Start with a blueprint, explore your layout in 3D, and share your design for review.</p>
+</aside>

@@ -13,6 +13,7 @@ $db->prepare('INSERT INTO users(public_id,name,email,password_hash,verified_at,c
 $db->exec("INSERT INTO users(public_id,name,email,password_hash,created_at) VALUES
  ('multi','First Middle One Last','multi@example.com','x',0), ('single','Solo','solo@example.com','x',0)");
 migrateAccounts($db);migrateAccounts($db);
+check($db->query("SELECT phone,birthdate FROM users WHERE public_id='legacy'")->fetch(PDO::FETCH_NUM) === [null, null], 'legacy accounts keep unknown phone and birthdate after upgrade');
 check($db->query("SELECT role FROM users WHERE public_id='legacy'")->fetchColumn()==='user','migration preserves legacy user with safe default role');
 check($db->query("SELECT first_name,middle_name,last_name,name FROM users WHERE public_id='multi'")->fetch(PDO::FETCH_NUM) === ['First','Middle One','Last','First Middle One Last'],'migration splits multi-word names and preserves the display name');
 check($db->query("SELECT first_name,middle_name,last_name,name FROM users WHERE public_id='single'")->fetch(PDO::FETCH_NUM) === ['Solo',null,'','Solo'],'migration preserves a legacy single-word name');

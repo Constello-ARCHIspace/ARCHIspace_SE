@@ -6,7 +6,22 @@
 
 details:not([open])>:not(summary){display:none!important}.search-row label{min-width:0}.nav-account{flex-shrink:0}#review>.review-grid{margin-bottom:24px}
 
-.owner-actions .owner-buttons{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}.owner-actions form{margin:0}.owner-actions button.danger{border:1px solid #c9a39e;background:#fff;color:#a94c43}.owner-actions button.danger:hover{background:#fbefed}
+.owner-actions .owner-buttons{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}
+.submission-row { padding: 18px 0 10px; border-top: 1px solid var(--divider); }
+.submission-title, .submission-links { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 16px; }
+.submission-title { justify-content: space-between; }
+.submission-title h3 { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
+.submission-title h3 a { color: var(--text-primary); }
+.submission-row .hint { margin: 4px 0; }
+.submission-links a, .owner-buttons .delete-link { display: inline-flex; align-items: center; min-height: 44px; font-size: 13px; }
+a.delete-link, .submission-error { color: #963d35; }
+.submission-form { width: 100%; max-width: 580px; margin-inline: auto; overflow-wrap: anywhere; }
+.submission-form > p { color: var(--text-secondary); line-height: 1.6; margin: 8px 0 24px; }
+.submission-form > p a { text-decoration: underline; }
+.submission-form .form-actions { flex-wrap: wrap; }
+.submission-form .form-actions > * { min-height: 44px; }
+button.confirm-delete { color: white; background: #963d35; border-color: #963d35; }
+button.confirm-delete:hover { color: white; background: #783029; border-color: #783029; }
 
 .portal-nav { background: var(--navy); border-bottom-color: var(--navy); }
 .portal-nav .brand { color: white; }

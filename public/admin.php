@@ -19,7 +19,6 @@ function adminIcon(string $name): string {
         'check'=>'<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
         'reviewer'=>'<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 12 0v1"/><path d="m16 11 2 2 4-4"/>',
         'history'=>'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>',
-        'search'=>'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
         'logout'=>'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
         'plus'=>'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M16 11h6"/>',
     ];
@@ -38,6 +37,7 @@ $initials=mb_strtoupper(mb_substr((string)$user['name'],0,2));
         <a href="admin.php" aria-current="page"><?= adminIcon('grid') ?>Overview</a>
         <a href="#projects"><?= adminIcon('inbox') ?>Review queue<?php if((int)$stats['unassigned']): ?><span class="admin-count" title="Projects that need a reviewer"><?= (int)$stats['unassigned'] ?></span><?php endif; ?></a>
         <a href="#assignment"><?= adminIcon('reviewer') ?>Reviewers</a>
+        <a href="studio.php"><?= adminIcon('folder') ?>Studio</a>
         <p class="admin-nav-label">Management</p>
         <a href="#users"><?= adminIcon('users') ?>Users &amp; roles</a>
         <a href="#activity"><?= adminIcon('history') ?>Audit log</a>
@@ -49,13 +49,15 @@ $initials=mb_strtoupper(mb_substr((string)$user['name'],0,2));
     </div>
 </aside>
 <div class="admin-main">
-<header class="admin-top">
-    <form method="get" action="admin.php#projects" class="admin-search" role="search"><label><span class="sr-only">Search all projects</span><?= adminIcon('search') ?><input type="search" name="q" maxlength="100" value="<?= esc($search) ?>" placeholder="Search projects or owners…"></label><?php if($status!==''){hidden('status',$status);} ?></form>
-    <div class="admin-top-actions"><a class="button" href="studio.php">Studio</a><button class="primary" data-open="inviteDialog"><?= adminIcon('plus') ?>Invite user</button></div>
-</header>
 <main class="portal-main admin-content">
 <?php if(isset($_SESSION['portal_notice'])){echo '<div class="notice" role="status">'.esc((string)$_SESSION['portal_notice']).'</div>';unset($_SESSION['portal_notice']);} ?>
-<div class="page-heading"><div><p class="crumb">Administration / Overview</p><h1>Project overview</h1><p>Manage users and roles, assign reviewers, and keep architectural feedback moving.</p></div><a class="button primary" href="#projects"><?= adminIcon('inbox') ?>Open review queue</a></div>
+<div class="page-heading">
+    <div><p class="crumb">Administration / Overview</p><h1>Project overview</h1><p>Manage users and roles, assign reviewers, and keep architectural feedback moving.</p></div>
+    <div class="admin-heading-actions">
+        <a class="button primary" href="#projects"><?= adminIcon('inbox') ?>Open review queue</a>
+        <button type="button" class="primary" data-open="inviteDialog"><?= adminIcon('plus') ?>Invite user</button>
+    </div>
+</div>
 <section class="metrics" aria-label="Overview">
 <div class="panel metric"><div class="metric-top"><p>All projects</p><span class="metric-icon"><?= adminIcon('folder') ?></span></div><strong><?= (int)$stats['total'] ?></strong><small>Submitted project snapshots</small></div>
 <div class="panel metric"><div class="metric-top"><p>Active users</p><span class="metric-icon"><?= adminIcon('users') ?></span></div><strong><?= (int)$stats['active_users'] ?></strong><small>Verified accounts with access</small></div>

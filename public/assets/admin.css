@@ -1,9 +1,8 @@
-/* Admin console shell: navy sidebar, white top bar, light work area.
+/* Admin console shell: navy sidebar and light work area.
    Colours come from theme.css and type from fonts.css, the same as the user dashboard. */
 
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .a-icon { width: 18px; height: 18px; flex: none; }
-html { scroll-padding-top: 76px; }
 
 .admin-app { display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 100vh; }
 
@@ -54,23 +53,11 @@ html { scroll-padding-top: 76px; }
 .admin-side-foot button { min-height: 34px; width: 34px; padding: 0; border: 0; background: transparent; color: var(--on-navy); }
 .admin-side-foot button:hover { background: rgba(255, 255, 255, .06); color: #fff; }
 
-/* ---------- top bar ---------- */
-.admin-main { min-width: 0; display: flex; flex-direction: column; }
-.admin-top {
-    position: sticky; top: 0; z-index: 20;
-    display: flex; align-items: center; gap: 16px;
-    height: 60px; padding: 0 32px;
-    background: rgba(255, 255, 255, .95); border-bottom: 1px solid var(--divider);
-    backdrop-filter: blur(10px);
-}
-.admin-search { flex: 1; max-width: 420px; margin: 0; }
-.admin-search label { position: relative; display: block; }
-.admin-search .a-icon { position: absolute; left: 12px; top: 50%; width: 16px; height: 16px; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; }
-.admin-search input { height: 38px; padding-left: 38px; border-color: var(--control-border); font-size: 12.5px; }
-.admin-top-actions { margin-left: auto; display: flex; gap: 10px; }
-.admin-top-actions .a-icon, .page-heading .a-icon { width: 16px; height: 16px; }
-
 /* ---------- content ---------- */
+.admin-main { min-width: 0; display: flex; flex-direction: column; }
+.admin-content .page-heading { flex-wrap: wrap; }
+.admin-heading-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.admin-heading-actions .a-icon { width: 16px; height: 16px; }
 .admin-content { width: 100%; max-width: 1440px; margin: 0; padding: 28px 32px 40px; }
 .crumb { margin: 0 0 8px; color: var(--text-muted); font-size: 12px; font-weight: 500; }
 .admin-content .page-heading h1 { font-size: 24px; font-weight: 600; letter-spacing: -.4px; margin-bottom: 6px; }
@@ -117,12 +104,9 @@ html { scroll-padding-top: 76px; }
     .admin-nav a { white-space: nowrap; padding: 8px 10px; }
     .admin-side-foot { margin: 0 0 0 auto; padding: 0; border: 0; }
     .admin-who { display: none; }
-    .admin-top { padding: 0 16px; }
     .admin-content { padding: 22px 16px 36px; }
-    html { scroll-padding-top: 70px; }
 }
 @media (max-width: 760px) {
-    .admin-top-actions .button:not(.primary) { display: none; }
     .queue-head, .queue-filters { flex-wrap: wrap; }
     .queue-filters .status-filter { flex: 1; width: auto; }
 }

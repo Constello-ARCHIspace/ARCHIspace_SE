@@ -38,7 +38,8 @@ final class AdminService {
         $filter=$where?' WHERE '.implode(' AND ',$where):'';
         $q=$this->db->prepare('SELECT count(*) FROM projects p JOIN users u ON u.id=p.owner_id'.$filter);$q->execute($args);$total=(int)$q->fetchColumn();
         $page=max(1,min($page,max(1,(int)ceil($total/20))));$offset=($page-1)*20;
-        $q=$this->db->prepare('SELECT p.id,p.name,p.kind,p.owner_id,p.status,p.assigned_to,p.created_at,p.version,u.name AS owner_name,r.name AS reviewer_name FROM projects p JOIN users u ON u.id=p.owner_id LEFT JOIN users r ON r.id=p.assigned_to'.$filter.' ORDER BY p.created_at DESC,p.id DESC LIMIT 20 OFFSET '.$offset);$q->execute($args);
+        $feedbackFlag=$own?',EXISTS(SELECT 1 FROM feedback f WHERE f.project_id=p.id) AS has_feedback':'';
+        $q=$this->db->prepare('SELECT p.id,p.name,p.kind,p.owner_id,p.status,p.assigned_to,p.created_at,p.version,u.name AS owner_name,r.name AS reviewer_name'.$feedbackFlag.' FROM projects p JOIN users u ON u.id=p.owner_id LEFT JOIN users r ON r.id=p.assigned_to'.$filter.' ORDER BY p.created_at DESC,p.id DESC LIMIT 20 OFFSET '.$offset);$q->execute($args);
         return ['rows'=>$q->fetchAll(PDO::FETCH_ASSOC),'total'=>$total,'page'=>$page];
     }
     public function users(int $actor,string $search='',int $page=1): array {

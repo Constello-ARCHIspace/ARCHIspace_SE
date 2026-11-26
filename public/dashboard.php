@@ -82,8 +82,8 @@ $initials=mb_strtoupper(mb_substr((string)$user['name'],0,2));
     <?php if(!$showReports): ?>
     <section class="dash-intro <?= $latest ? 'has-submission' : '' ?>" aria-labelledby="intro-heading">
         <div class="dash-intro-copy">
-            <h1 id="intro-heading"><?= $latest ? 'Your design workspace' : 'Design your next floor plan' ?></h1>
-            <p><?= $latest ? 'Start a new project, reopen a saved design or check the feedback on your latest submission.' : 'Start with a blank site or import a blueprint. Arrange rooms in 2D and 3D, then explore how your design responds to floods and storms.' ?></p>
+            <h1 id="intro-heading">Your design workspace</h1>
+            <p>Start a new project, reopen a saved design or check the feedback on your latest submission.</p>
             <div class="dash-actions">
                 <a class="button primary" href="studio.php?tool=new"><?= dashIcon('plus') ?>Create new project</a>
                 <a class="dash-link" href="studio.php?tool=designs">Open saved designs <?= dashIcon('arrow') ?></a>

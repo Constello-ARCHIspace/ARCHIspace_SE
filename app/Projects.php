@@ -28,6 +28,7 @@ final class ProjectSubmission {
      */
     public static function editableStatus(PDO $db,array $project): bool {
         if($project['status']!=='unassigned'||$project['assigned_to']!==null)return false;
+        if(isset($project['has_feedback']))return !(bool)$project['has_feedback'];
         $q=$db->prepare('SELECT count(*) FROM feedback WHERE project_id=?');$q->execute([(int)$project['id']]);return (int)$q->fetchColumn()===0;
     }
     private function editable(int $actor,int $id,int $expected): array {
@@ -37,17 +38,19 @@ final class ProjectSubmission {
         if(!self::editableStatus($this->db,$p))throw new DomainException('A reviewer is already working on this submission, so it can no longer be changed or deleted. Submit your changes as a new submission instead.');
         return $p;
     }
-    /** Replace the snapshot, name, type and request of the owner's own submission before review starts. */
-    public function update(int $actor,int $id,int $expected,string $name,string $kind,string $request,string $json): void {
+    /** Update the submission details, optionally replacing its floor plan. */
+    public function update(int $actor,int $id,int $expected,string $name,string $kind,string $request,?string $json=null): void {
         $this->fields($name,$kind,$request);
-        $canonical=$this->canonicalSnapshot($actor,$json);
+        $canonical=$json===null?null:$this->canonicalSnapshot($actor,$json);
         $service=new AdminService($this->db);
         $this->db->exec('BEGIN IMMEDIATE');
         try{
             $service->user($actor);$p=$this->editable($actor,$id,$expected);
-            $q=$this->db->prepare('SELECT COALESCE(sum(length(state_json)),0) FROM projects WHERE owner_id=?');$q->execute([$actor]);
-            if((int)$q->fetchColumn()-strlen($p['state_json'])+strlen($canonical)>64*1024*1024)throw new DomainException('Submission quota reached. Contact your administrator.');
-            $this->db->prepare('UPDATE projects SET name=?,kind=?,owner_request=?,state_json=?,version=version+1,updated_at=? WHERE id=?')->execute([$name,$kind,$request,$canonical,time(),$id]);
+            if($canonical!==null){
+                $q=$this->db->prepare('SELECT COALESCE(sum(length(state_json)),0) FROM projects WHERE owner_id=?');$q->execute([$actor]);
+                if((int)$q->fetchColumn()-strlen($p['state_json'])+strlen($canonical)>64*1024*1024)throw new DomainException('Submission quota reached. Contact your administrator.');
+            }
+            $this->db->prepare('UPDATE projects SET name=?,kind=?,owner_request=?,state_json=COALESCE(?,state_json),version=version+1,updated_at=? WHERE id=?')->execute([$name,$kind,$request,$canonical,time(),$id]);
             $service->audit($actor,'project_updated','project',$id);
             $this->db->exec('COMMIT');
         }catch(Throwable $e){$this->db->exec('ROLLBACK');throw $e;}

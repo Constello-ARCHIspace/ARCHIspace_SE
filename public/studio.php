@@ -1133,7 +1133,9 @@ function normalize(d){
  return s}
 let reviewTarget=null;// the submission this design was opened from, while its owner can still update it
 function loadState(d){reviewTarget=null;try{S=normalize(d);if(!openingCloud){cloud=null;storeCloud()}bpImages.clear();comparisonSuggestion=null;comparisonBlueprint=null;$('compareMode').value='off';sel=null;clampRooms();syncUI();rebuild();fitCamera(view==='top');fit2D();renderPanels();commit();return true}catch(e){toast('Could not load project: '+e.message);return false}}
-$('submitReviewBtn').onclick=()=>{$('reviewMenu').open=false;const f=$('reviewSubmissionForm');f.elements.kind.value=S.site.kind||'House';$('reviewName').value=S.name||'Untitled project';$('reviewSubmissionStatus').textContent='';
+$('submitReviewBtn').onclick=()=>{$('reviewMenu').open=false;const f=$('reviewSubmissionForm');
+ f.elements.kind.value=reviewTarget && S.site.kind===reviewTarget.initialPlanKind ? reviewTarget.kind : S.site.kind||'House';
+ $('reviewName').value=S.name||'Untitled project';$('reviewSubmissionStatus').textContent='';
  $('reviewTargetBox').hidden=!reviewTarget;if(reviewTarget){$('reviewTargetName').textContent=reviewTarget.name;f.elements.reviewMode.value='update';$('reviewName').value=reviewTarget.name;f.elements.request.value=reviewTarget.request||''}reviewModeSync();$('reviewSubmissionDialog').showModal()};
 function reviewModeSync(){const up=!!reviewTarget&&$('reviewSubmissionForm').elements.reviewMode.value==='update';$('reviewReplace').value=up?reviewTarget.id:0;$('reviewVersion').value=up?reviewTarget.version:0;$('confirmReviewSubmission').textContent=up?'Update submission':'Submit for review'}
 for(const r of document.querySelectorAll('input[name=reviewMode]'))r.onchange=reviewModeSync;
@@ -2154,7 +2156,7 @@ async function openSubmission(){
  if(!okToReplace())return;
  try{const r=await fetch('project-download.php?id='+FROM_SUBMISSION.id,{credentials:'same-origin'});if(!r.ok)throw Error('HTTP '+r.status);
   if(!loadState(await r.json()))return;
-  reviewTarget=FROM_SUBMISSION.editable?FROM_SUBMISSION:null;
+  reviewTarget=FROM_SUBMISSION.editable?{...FROM_SUBMISSION,initialPlanKind:S.site.kind}:null;
   toast('Opened submission “'+FROM_SUBMISSION.name+'”. '+(reviewTarget?'To change it, edit and choose Review → Submit for review.':'A reviewer has it, so changes go in as a new submission.'))}
  catch(e){toast('Could not open that submission')}}
 window.__archi={get S(){return S},select,rebuild,addRoom,addObject,setView,loadState,TEMPLATES,makeTemplate};

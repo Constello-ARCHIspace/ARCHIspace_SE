@@ -19,12 +19,12 @@
     background-size: 46px 46px;
     -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 45%, #000 40%, transparent 100%);
     mask-image: radial-gradient(ellipse 80% 70% at 50% 45%, #000 40%, transparent 100%); }
-.dash-intro-copy { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; padding: clamp(26px, 3.5vw, 54px); }
-.dash-intro-copy > p { margin-top: 16px; max-width: 50ch; color: var(--on-navy); font-size: 15px; line-height: 1.65; }
-.dash-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 22px; margin-top: 24px; }
-.dash-actions .button { min-height: 44px; padding: 10px 18px; font-size: 14px; }
+.dash-intro-copy { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: clamp(28px, 4vw, 54px) 20px; text-align: center; }
+.dash-intro-copy > p { margin-top: 16px; max-width: 58ch; color: var(--on-navy); font-size: 15px; line-height: 1.65; text-wrap: balance; }
+.dash-actions { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
 .dash-actions .primary:hover { background: var(--action-hover); }
-.dash-actions .dash-link { color: white; }
+.dash-actions .dash-link { color: white; border: 1px solid #7890a8; }
+.dash-actions .dash-link:hover { background: var(--navy-hover); text-decoration: none; }
 .dash-intro a:focus-visible, .dashboard .portal-nav a:focus-visible { outline-color: var(--focus-on-navy); }
 .dash-actions .dash-icon, .dash-link .dash-icon { width: 17px; height: 17px; }
 .dash-link { display: inline-flex; align-items: center; gap: 9px; min-height: 44px; font-weight: 600; font-size: 13px; }
@@ -33,15 +33,10 @@
 .dash-example figcaption { display: flex; justify-content: space-between; gap: 12px; margin: 0 24px 15px; padding-top: 10px; border-top: 1px solid #394c62; align-items: baseline; font-size: 13px; }
 .dash-example figcaption span { color: var(--on-navy); font-size: 12px; }
 .dash-intro.has-submission { display: block; }
-.has-submission .dash-intro-copy { align-items: center; padding: clamp(28px, 4vw, 54px) 20px; text-align: center; }
-.has-submission .dash-intro-copy > p { max-width: 58ch; text-wrap: balance; }
-.has-submission .dash-actions { justify-content: center; gap: 12px; margin-top: 24px; }
-.has-submission .dash-actions > a {
+.dash-actions > a {
     justify-content: center; min-height: 52px; min-width: 202px; padding: 12px 24px;
     border-radius: 999px; font-size: 16px; font-weight: 600;
 }
-.has-submission .dash-actions .dash-link { border: 1px solid #7890a8; }
-.has-submission .dash-actions .dash-link:hover { background: var(--navy-hover); text-decoration: none; }
 .dash-section-head { display: flex; align-items: baseline; flex-wrap: wrap; justify-content: space-between; column-gap: 12px; margin-bottom: 16px; }
 .dash-section-head .dash-link { min-height: 32px; }
 .dash-outcome-list > a { color: var(--ink); display: grid; gap: 12px; }
@@ -82,9 +77,7 @@
     .dashboard .portal-nav nav a { flex: none; }
     .dash-main { padding: 18px 14px 28px; }
     .dash-intro, .dash-project, .dash-outcomes { grid-template-columns: minmax(0,1fr); }
-    .dash-intro-copy { padding: 24px 20px; }
     .dash-intro-copy > p { margin-top: 12px; }
-    .dash-actions { margin-top: 16px; gap: 3px 14px; }
     .dash-example img { max-height: 176px; }
     .dash-example figcaption { margin: 0 16px 10px; padding-top: 6px; }
     .dash-outcome-list p { margin-top: 3px; }

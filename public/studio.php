@@ -253,7 +253,7 @@ canvas#plan2d{display:none;cursor:default}
         <form action="logout.php" method="post"><input type="hidden" name="csrf" value="<?= esc($_SESSION['csrf']) ?>"><button type="submit">Sign out</button></form>
       </div>
     </details>
-    <details class="menu" id="reviewMenu"><summary>Review</summary><div class="menu-list"><button id="submitReviewBtn">Submit for review</button><a href="projects.php">My submissions</a><?php if ($currentUser['role'] !== 'user'): ?><a href="<?= esc(accountHome($currentUser)) ?>">Staff dashboard</a><?php endif; ?></div></details>
+    <details class="menu" id="reviewMenu"><summary>Review</summary><div class="menu-list"><button id="submitReviewBtn">Submit for review</button><a href="profile.php#submissions">My submissions</a><?php if ($currentUser['role'] !== 'user'): ?><a href="<?= esc(accountHome($currentUser)) ?>">Staff dashboard</a><?php endif; ?></div></details>
     <details class="menu" id="exportMenu"><summary>Export</summary><div class="menu-list"><button id="exportJson">Project file (.json)</button><button id="exportPng">Current view (.png)</button><button id="exportReport">Readiness report (print / PDF)</button></div></details>
     <button id="saveBtn" class="primary" title="Save to My designs (Ctrl+S)">Save</button>
   </div>

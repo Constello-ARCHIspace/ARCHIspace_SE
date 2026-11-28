@@ -30,4 +30,4 @@ try{
 catch(StaleChange $e){http_response_code(409);$message=$e->getMessage();}
 catch(InvalidArgumentException|DomainException $e){http_response_code(422);$message=$e->getMessage();}
 catch(Throwable $e){http_response_code(503);error_log('ARCHIspace submission failed: '.get_class($e));$message='Submission service unavailable. Please try again.';}
-portalHeader('Submission not saved',$user);echo '<section class="panel"><h1>Submission not saved.</h1><p>'.esc($message).'</p><p>Your studio design is unchanged. Return to the studio to retry, or select the file again on My submissions.</p><a class="button" href="projects.php">My submissions</a> <a class="button" href="studio.php">Design studio</a></section>';portalFooter();
+portalHeader('Submission not saved',$user);echo '<section class="panel"><h1>Submission not saved.</h1><p>'.esc($message).'</p><p>Your studio design is unchanged. Return to the studio to retry, or select the file again on My submissions.</p><a class="button" href="profile.php#submissions">My submissions</a> <a class="button" href="studio.php">Design studio</a></section>';portalFooter();

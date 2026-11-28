@@ -77,4 +77,10 @@ $auth->register('Pending','User','pending@example.com',$password,$phone,$birthda
 $auth->requestReset('pending@example.com');
 $auth->resetPassword($emails[array_key_last($emails)][1],$newPassword);
 check($auth->login('pending@example.com',$newPassword)['verified_at'] !== null,'reset verifies a pending account');
+$pendingId = (int)$db->query("SELECT id FROM users WHERE email='pending@example.com'")->fetchColumn();
+$auth->updateProfile($pendingId, ' Renamed ', 'Person', '0917 000 1111', $birthdate, ' Middle ');
+check($db->query("SELECT name,phone FROM users WHERE id=$pendingId")->fetch(PDO::FETCH_NUM) === ['Renamed Middle Person', '09170001111'], 'profile update normalizes names and phone');
+rejects(fn()=>$auth->updateProfile($pendingId, 'Renamed', ' ', '09170001111', $birthdate), 'profile update rejects blank last name');
+rejects(fn()=>$auth->updateProfile($pendingId, 'Renamed', 'Person', '123', $birthdate), 'profile update rejects bad phone');
+check($db->query("SELECT name FROM users WHERE email='student@example.com'")->fetchColumn() === 'Test Student', 'profile update leaves other accounts unchanged');
 echo "$checks checks passed.\n";

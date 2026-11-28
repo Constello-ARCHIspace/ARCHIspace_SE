@@ -26,7 +26,7 @@ try{
         if($action==='withdraw'){
             $submission->withdraw($actor,$id,$version);
             $_SESSION['portal_notice']='Submission deleted.';
-            header('Location: projects.php',true,303);exit;
+            header('Location: profile.php#submissions',true,303);exit;
         }
         $name=textInput($input,'name');$kind=textInput($input,'kind');$request=textInput($input,'request');
         try{
@@ -42,7 +42,7 @@ catch(Throwable $e){http_response_code(503);error_log('ARCHIspace project action
 
 if(isset($message)){
     portalHeader('Submission unavailable',$user);
-    echo '<section class="panel submission-form"><h1>Submission unavailable</h1><p>'.esc($message).'</p><a class="button" href="projects.php">My submissions</a></section>';
+    echo '<section class="panel submission-form"><h1>Submission unavailable</h1><p>'.esc($message).'</p><a class="button" href="profile.php#submissions">My submissions</a></section>';
     portalFooter();exit;
 }
 $editing=$action==='edit';
@@ -64,7 +64,7 @@ portalHeader($editing?'Edit submission':'Delete submission',$user);
         <label>What would you like reviewed?<textarea name="request" rows="4" maxlength="2000"><?= esc($request??'') ?></textarea></label>
         <?php endif; ?>
         <div class="form-actions">
-            <a class="button" href="projects.php"><?= $editing?'Cancel':'Keep submission' ?></a>
+            <a class="button" href="profile.php#submissions"><?= $editing?'Cancel':'Keep submission' ?></a>
             <button class="<?= $editing?'primary':'confirm-delete' ?>"><?= $editing?'Save changes':'Delete submission' ?></button>
         </div>
     </form>

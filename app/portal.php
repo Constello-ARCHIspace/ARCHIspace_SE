@@ -16,13 +16,21 @@ function csrfField(): void {echo '<input type="hidden" name="csrf" value="'.esc(
 function hidden(string $name,int|string $value): void {echo '<input type="hidden" name="'.esc($name).'" value="'.esc((string)$value).'">';}
 function badge(string $value): string {return '<span class="badge '.($value==='unassigned'?'amber':'').'">'.esc(str_replace('_',' ',$value)).'</span>';}
 function dateLabel(int|string|null $date): string {return $date?gmdate('M j, Y',(int)$date):'—';}
+function accountLink(array $user): string {
+    $current=basename((string)($_SERVER['SCRIPT_NAME']??''))==='profile.php'?' aria-current="page"':'';
+    return '<a class="account-link" href="profile.php"'.$current.'><span class="avatar" aria-hidden="true">'.esc(mb_strtoupper(mb_substr($user['name'],0,2))).'</span><span class="account-name">'.esc($user['name']).'</span></a>';
+}
 function portalHeader(string $title,array $user): void {
-    $role=$user['role'];$prefix=$role==='sub_admin'?'subadmin':'admin';$home=accountHome($user);
-    echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'.esc($title).' | Archispace</title><link rel="stylesheet" href="assets/fonts.css"><link rel="stylesheet" href="assets/theme.css"><link rel="stylesheet" href="assets/portal.css"><script src="assets/portal.js" defer></script></head><body><header class="portal-nav"><a class="brand" href="'.esc($home).'"><span class="brand-mark">'.icon('imgArchispaceMark',$prefix).'</span>archispace</a><nav aria-label="Workspace">';
+    $role=$user['role'];$prefix=$role==='sub_admin'?'subadmin':'admin';$home=accountHome($user);$owner=$role==='user';$onProfile=basename((string)($_SERVER['SCRIPT_NAME']??''))==='profile.php';
+    echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'.esc($title).' | Archispace</title><link rel="stylesheet" href="assets/fonts.css"><link rel="stylesheet" href="assets/theme.css"><link rel="stylesheet" href="assets/portal.css">'.($owner?'<link rel="stylesheet" href="assets/dashboard.css">':'').'<script src="assets/portal.js" defer></script></head><body'.($owner?' class="dashboard"':'').'><header class="portal-nav"><a class="brand" href="'.esc($home).'"><span class="brand-mark">'.icon('imgArchispaceMark',$prefix).'</span>archispace</a><nav aria-label="Workspace">';
     if($role==='admin')echo '<a href="admin.php">Overview</a><a href="admin.php#projects">All projects</a><a href="admin.php#users">Users &amp; roles</a><a href="admin.php#assignment">Reviewers</a><a href="admin.php#activity">Audit log</a>';
     elseif($role==='sub_admin')echo '<a href="subadmin.php">Assigned projects</a><a href="subadmin.php?published=1">My reviews</a><a href="#review-guide">Review guide</a>';
-    else echo '<a href="studio.php">Design studio</a><a href="projects.php">My submissions</a><a href="dashboard.php?tab=reports">Reports and feedback</a>';
-    echo '</nav><div class="nav-account">'.badge($role).'<a href="studio.php">Studio</a><form action="logout.php" method="post">';csrfField();echo '<button>'.icon('imgLogOut',$prefix).'Logout</button></form><span class="avatar" title="'.esc($user['name']).'">'.esc(mb_strtoupper(mb_substr($user['name'],0,2))).'</span></div></header><main class="portal-main">';
+    else echo '<a href="dashboard.php">Dashboard</a><a href="studio.php">Design studio</a>'.($onProfile?'':'<a href="profile.php#submissions">My submissions</a>').'<a href="dashboard.php?tab=reports">Reports and feedback</a>';
+    // Owners get the dashboard's account area (account link, then logout); staff keep their role badge.
+    echo '</nav><div class="nav-account">';
+    if($owner)echo accountLink($user);
+    else echo badge($role).($onProfile?'':'<a href="studio.php">Studio</a>');
+    echo '<form action="logout.php" method="post">';csrfField();echo '<button>'.icon('imgLogOut',$prefix).'Logout</button></form>'.($owner?'':accountLink($user)).'</div></header><main class="portal-main">';
     if(isset($_SESSION['portal_notice'])){echo '<div class="notice" role="status">'.esc($_SESSION['portal_notice']).'</div>';unset($_SESSION['portal_notice']);}
 }
 function portalFooter(): void {echo '</main><footer class="portal-footer"><span>ARCHISPACE / CONCEPT PLANNING</span><span>Human feedback does not replace professional assessment or certification.</span><span>ARCHISPACE / V.02</span></footer></body></html>';}

@@ -34,3 +34,25 @@ button.confirm-delete:hover { color: white; background: #783029; border-color: #
 .portal-nav :focus-visible { outline-color: var(--focus-on-navy); }
 .panel { border-radius: 10px; }
 button.primary:hover, .button.primary:hover { background: var(--action-hover); border-color: var(--action-hover); }
+
+.account-link{display:flex;align-items:center;gap:10px;padding:4px 14px 4px 4px;border:1px solid #38506b;border-radius:999px;color:var(--on-navy);text-decoration:none;font-size:13px;font-weight:500;max-width:240px;transition:background .15s,color .15s}
+.account-link:hover,.account-link[aria-current="page"]{background:var(--navy-hover);color:white}
+.account-link .avatar{flex-shrink:0}
+.account-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#submissions{margin-top:24px}
+.notice.error{border-color:#e3b8b3;background:#fbeeec;color:#7a2e26;margin-bottom:16px}
+@media(max-width:760px){.account-name{display:none}.account-link{padding:3px}.nav-account .account-link .avatar{display:flex}}
+.profile-grid{align-items:stretch}
+.profile-grid>.panel{display:flex;flex-direction:column}
+.profile-grid>.panel>form{flex:1}
+.profile-grid>.panel>form>:last-child{margin-top:auto}
+.profile-grid input:disabled{background:var(--workspace,#f3f6f9);color:var(--muted);cursor:not-allowed}
+.submission-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:10px}
+.submission-actions .button{min-height:40px;font-size:13px;color:var(--text-primary)}
+.submission-actions .button:first-child{border-color:var(--action-color);color:var(--action-color)}
+.submission-actions .button:first-child:hover{background:var(--action-soft)}
+.submission-actions .button.danger{margin-left:auto;border-color:#e3b8b3;color:#963d35}
+.submission-actions .button.danger:hover{background:#fbeeec;border-color:#963d35}
+.action-icon{width:16px;height:16px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.action-note{margin:0 0 0 4px}
+@media(max-width:520px){.submission-actions .button{flex:1 1 100%}.submission-actions .button.danger{margin-left:0}}

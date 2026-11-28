@@ -14,7 +14,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     csrfCheck();
     try{$auth->limit('invite_accept:user:'.$user['id'],10,900);}catch(DomainException $e){http_response_code(429);header('Retry-After: 900');exit('Too many attempts. Please try again later.');}
     if($service->acceptInvite((int)$user['id'],$_SESSION['invitation_token']??'')){
-        unset($_SESSION['invitation_token']);$_SESSION['portal_notice']='Invitation accepted. Welcome to ARCHIspace.';header('Location: projects.php',true,303);exit;
+        unset($_SESSION['invitation_token']);$_SESSION['portal_notice']='Invitation accepted. Welcome to ARCHIspace.';header('Location: profile.php#submissions',true,303);exit;
     }
     http_response_code(422);$message='Invitation expired, already accepted, invalid, or addressed to another email. Sign in with the invited email or request a new invitation.';
 }

@@ -58,7 +58,6 @@ foreach(($showReports ? [] : array_slice($rows,0,5)) as $p){
 usort($events,fn($a,$b)=>$b['t']<=>$a['t']);
 $events=array_slice($events,0,4);
 
-$initials=mb_strtoupper(mb_substr((string)$user['name'],0,2));
 ?>
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title><?= $showReports ? 'Reports and feedback' : 'Dashboard' ?> | Archispace</title><link rel="stylesheet" href="assets/fonts.css"><link rel="stylesheet" href="assets/theme.css"><link rel="stylesheet" href="assets/portal.css"><link rel="stylesheet" href="assets/dashboard.css"><script src="assets/portal.js" defer></script><script src="assets/dashboard.js" defer></script></head>
@@ -68,11 +67,11 @@ $initials=mb_strtoupper(mb_substr((string)$user['name'],0,2));
     <nav aria-label="Workspace">
         <a href="dashboard.php"<?= $showReports ? '' : ' aria-current="page"' ?>>Dashboard</a>
         <a href="studio.php">Design studio</a>
-        <a href="projects.php">My submissions</a>
+        <a href="profile.php#submissions">My submissions</a>
         <a href="dashboard.php?tab=reports"<?= $showReports ? ' aria-current="page"' : '' ?>>Reports and feedback</a>
     </nav>
     <div class="nav-account">
-        <span class="avatar" title="<?= esc((string)$user['name']) ?>"><?= esc($initials) ?></span>
+        <?= accountLink($user) ?>
         <form action="logout.php" method="post"><?php csrfField(); ?><button><?= icon('imgLogOut','admin') ?>Logout</button></form>
     </div>
 </header>
@@ -99,7 +98,7 @@ $initials=mb_strtoupper(mb_substr((string)$user['name'],0,2));
 
     <?php if($latest): ?>
     <section class="dash-review" aria-labelledby="latest-title">
-        <div class="dash-section-head"><h2 id="latest-title">Latest submission</h2><a class="dash-link" href="projects.php">My submissions (<?= $total ?>) <?= dashIcon('arrow') ?></a></div>
+        <div class="dash-section-head"><h2 id="latest-title">Latest submission</h2><a class="dash-link" href="profile.php#submissions">My submissions (<?= $total ?>) <?= dashIcon('arrow') ?></a></div>
         <div class="dash-review-grid">
             <article class="dash-project">
                 <div class="dash-details">
@@ -137,7 +136,7 @@ $initials=mb_strtoupper(mb_substr((string)$user['name'],0,2));
             <a href="studio.php?tool=review"><?= dashIcon('message') ?><div><h3>Ask a reviewer for feedback</h3><p>Share a snapshot of your design and tell the reviewer what to look at.</p></div><?= dashIcon('arrow') ?></a>
             <?php if(!$latest && $submissionsAvailable): ?>
             <div class="dash-submission-note">
-                <strong>No submissions yet.</strong> After you submit, you can track feedback in <a href="projects.php">My submissions</a>.
+                <strong>No submissions yet.</strong> After you submit, you can track feedback in <a href="profile.php#submissions">My submissions</a>.
             </div>
             <?php endif; ?>
         </div>

@@ -42,6 +42,18 @@ final class Auth
         $lastName = self::namePart($lastName, 'last name', true);
         $middleName = self::namePart($middleName ?? '', 'middle name', false);
         $email = self::email($email);
+        $phone = self::phone($phone);
+        self::birthdate($birthdate);
+        $hash = self::passwordHash($password);
+        $q =$this->db->prepare('INSERT INTO users(public_id,first_name,middle_name,last_name,email,phone,birthdate,password_hash,created_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(email) DO NOTHING');
+        $q->execute([bin2hex(random_bytes(16)), $firstName, $middleName === '' ? null : $middleName, $lastName, $email, $phone, $birthdate, $hash, time()]);
+        // Existing registrations never overwrite a password or trigger another email.
+        if ($q->rowCount() !== 1) throw new DomainException('An account with this email already exists. Log in, or use Forgot password if you cannot access it.');
+        $this->sendVerification((int)$this->db->lastInsertId(), $email);
+    }
+
+    private static function phone(string $phone): string
+    {
         $phone = trim($phone);
         if (strlen($phone) > 24 || !preg_match('/^\+?[0-9 ().-]+$/D', $phone)) {
             throw new InvalidArgumentException('Enter a phone number with 7 to 15 digits. You may include a leading +.');
@@ -50,6 +62,11 @@ final class Auth
         if (!preg_match('/^\+?[0-9]{7,15}$/D', $phone)) {
             throw new InvalidArgumentException('Enter a phone number with 7 to 15 digits.');
         }
+        return $phone;
+    }
+
+    private static function birthdate(string $birthdate): void
+    {
         $dob = preg_match('/^\d{4}-\d{2}-\d{2}$/D', $birthdate) ? DateTimeImmutable::createFromFormat('!Y-m-d', $birthdate) : false;
         $today = new DateTimeImmutable('today');
         if (!$dob || $dob->format('Y-m-d') !== $birthdate || $birthdate < '1900-01-01' || $dob > $today || $dob->diff($today)->y > 120) {
@@ -58,12 +75,18 @@ final class Auth
         if ($dob->diff($today)->y < 18) {
             throw new InvalidArgumentException('You must be at least 18 years old to create an account.');
         }
-        $hash = self::passwordHash($password);
-        $q =$this->db->prepare('INSERT INTO users(public_id,first_name,middle_name,last_name,email,phone,birthdate,password_hash,created_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(email) DO NOTHING');
-        $q->execute([bin2hex(random_bytes(16)), $firstName, $middleName === '' ? null : $middleName, $lastName, $email, $phone, $birthdate, $hash, time()]);
-        // Existing registrations never overwrite a password or trigger another email.
-        if ($q->rowCount() !== 1) throw new DomainException('An account with this email already exists. Log in, or use Forgot password if you cannot access it.');
-        $this->sendVerification((int)$this->db->lastInsertId(), $email);
+    }
+
+    // Email is not editable here: changing it would need a fresh inbox verification.
+    public function updateProfile(int $id, string $firstName, string $lastName, string $phone, string $birthdate, ?string $middleName = null): void
+    {
+        $firstName = self::namePart($firstName, 'first name', true);
+        $lastName = self::namePart($lastName, 'last name', true);
+        $middleName = self::namePart($middleName ?? '', 'middle name', false);
+        $phone = self::phone($phone);
+        self::birthdate($birthdate);
+        $this->db->prepare('UPDATE users SET first_name=?, middle_name=?, last_name=?, phone=?, birthdate=? WHERE id=?')
+            ->execute([$firstName, $middleName === '' ? null : $middleName, $lastName, $phone, $birthdate, $id]);
     }
 
     private static function passwordHash(string $password): string

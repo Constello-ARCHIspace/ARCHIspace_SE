@@ -16,9 +16,11 @@ function csrfField(): void {echo '<input type="hidden" name="csrf" value="'.esc(
 function hidden(string $name,int|string $value): void {echo '<input type="hidden" name="'.esc($name).'" value="'.esc((string)$value).'">';}
 function badge(string $value): string {return '<span class="badge '.($value==='unassigned'?'amber':'').'">'.esc(str_replace('_',' ',$value)).'</span>';}
 function dateLabel(int|string|null $date): string {return $date?gmdate('M j, Y',(int)$date):'—';}
+// "Juan Dela Cruz" -> "JD"; single names use their first two letters.
+function initials(string $name): string {$w=preg_split('/\s+/u',trim($name),-1,PREG_SPLIT_NO_EMPTY)?:['?'];return mb_strtoupper(count($w)>1?mb_substr($w[0],0,1).mb_substr(end($w),0,1):mb_substr($w[0],0,2));}
 function accountLink(array $user): string {
     $current=basename((string)($_SERVER['SCRIPT_NAME']??''))==='profile.php'?' aria-current="page"':'';
-    return '<a class="account-link" href="profile.php"'.$current.'><span class="avatar" aria-hidden="true">'.esc(mb_strtoupper(mb_substr($user['name'],0,2))).'</span><span class="account-name">'.esc($user['name']).'</span></a>';
+    return '<a class="account-link" href="profile.php"'.$current.'><span class="avatar" aria-hidden="true">'.esc(initials($user['name'])).'</span><span class="account-name">'.esc($user['name']).'</span></a>';
 }
 function portalHeader(string $title,array $user): void {
     $role=$user['role'];$prefix=$role==='sub_admin'?'subadmin':'admin';$home=accountHome($user);$owner=$role==='user';$onProfile=basename((string)($_SERVER['SCRIPT_NAME']??''))==='profile.php';
@@ -33,7 +35,12 @@ function portalHeader(string $title,array $user): void {
     echo '<form action="logout.php" method="post">';csrfField();echo '<button>'.icon('imgLogOut',$prefix).'Logout</button></form>'.($owner?'':accountLink($user)).'</div></header><main class="portal-main">';
     if(isset($_SESSION['portal_notice'])){echo '<div class="notice" role="status">'.esc($_SESSION['portal_notice']).'</div>';unset($_SESSION['portal_notice']);}
 }
-function portalFooter(): void {echo '</main><footer class="portal-footer"><span>ARCHISPACE / CONCEPT PLANNING</span><span>Human feedback does not replace professional assessment or certification.</span><span>ARCHISPACE / V.02</span></footer></body></html>';}
+function siteFooter(): string {
+    return '<footer class="site-footer"><span>Archispace · Concept planning</span><nav aria-label="Footer"><a href="studio.php?tool=guide">Quick guide</a><button type="button" data-open="about-dialog">About Archispace</button><button type="button" data-open="help-dialog">Privacy &amp; help</button></nav><small>© Archispace</small></footer>'
+    .'<dialog id="about-dialog" aria-labelledby="about-title"><div class="section-heading"><h2 id="about-title">About Archispace</h2><button type="button" data-close="about-dialog" aria-label="Close">×</button></div><p>Design a floor plan, explore site conditions and compare flood, storm and earthquake scenarios. Save working designs in My designs, and submit a copy when you want human feedback.</p><p>Readiness reports give illustrative estimates. Ask qualified professionals to verify dimensions, structure, drainage and local code requirements before construction.</p></dialog>'
+    .'<dialog id="help-dialog" aria-labelledby="help-title"><div class="section-heading"><h2 id="help-title">Your account &amp; privacy</h2><button type="button" data-close="help-dialog" aria-label="Close">×</button></div><p>ARCHIspace stores your name, email, phone number, date of birth, hashed password, and verification status on the server. Working plans stay in this browser. Submitted review snapshots and uploaded blueprint images are stored on the server. Admins and assigned reviewers can access submitted designs.</p><p>Your session ends after 30 minutes of inactivity or 8 hours in total. This concept-planning tool does not replace professional architecture or engineering advice. For account assistance, contact your project administrator.</p></dialog>';
+}
+function portalFooter(): void {echo '</main>'.siteFooter().'</body></html>';}
 function emptyState(string $heading,string $text): void {echo '<div class="empty-state"><h3>'.esc($heading).'</h3><p>'.esc($text).'</p></div>';}
 function feedbackComposer(array $project,array $user,array $feedback): void {
     $draft=null;foreach($feedback as $f)if($f['status']==='draft'&&(int)$f['author_id']===(int)$user['id']){$draft=$f;break;}

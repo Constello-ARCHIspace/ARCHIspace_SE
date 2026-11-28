@@ -96,7 +96,7 @@ final class AdminService {
     public function feedback(int $actor,int $project): array {
         $this->project($actor,$project);$u=$this->user($actor);
         // Only the draft author can see their draft; owners get published feedback only.
-        $q=$this->db->prepare("SELECT f.*,u.name AS author_name FROM feedback f JOIN users u ON u.id=f.author_id WHERE project_id=? AND (f.status='published' OR (f.author_id=? AND CAST(? AS INTEGER)=1)) ORDER BY f.updated_at DESC,f.id DESC");
+        $q=$this->db->prepare("SELECT f.*,u.name AS author_name,u.role AS author_role FROM feedback f JOIN users u ON u.id=f.author_id WHERE project_id=? AND (f.status='published' OR (f.author_id=? AND CAST(? AS INTEGER)=1)) ORDER BY f.updated_at DESC,f.id DESC");
         $staff=in_array($u['role'],['admin','sub_admin'],true)?1:0;$q->execute([$project,$actor,$staff]);return $q->fetchAll(PDO::FETCH_ASSOC);
     }
     public function stats(int $actor): array {

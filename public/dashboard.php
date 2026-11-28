@@ -11,6 +11,7 @@ function dashIcon(string $name): string {
         'message'=>'<path d="M4 5h16v11H9l-5 4V5z"/>',
         'download'=>'<path d="M12 4v11M7 11l5 5 5-5M4 20h16"/>',
         'arrow'=>'<path d="M4 12h15m-6-6 6 6-6 6"/>',
+        'info'=>'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
     ];
     return '<svg class="dash-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'.($paths[$name]??'').'</svg>';
 }
@@ -26,6 +27,14 @@ $rows=[];$total=0;$submissionsAvailable=true;
 try{$list=$service->projects((int)$user['id'],'','',1,true);$rows=$list['rows'];$total=(int)$list['total'];}
 catch(Throwable $e){$submissionsAvailable=false;}
 $latest=$rows[0]??null;
+
+// Reports tab: published feedback on the latest submission (owners never see drafts).
+$feedback=[];$feedbackOk=true;
+if($latest && $showReports){
+    try{$feedback=array_slice($service->feedback((int)$user['id'],(int)$latest['id']),0,3);}
+    catch(Throwable $e){$feedbackOk=false;}
+}
+$roleLabels=['admin'=>'Admin','sub_admin'=>'Sub-admin reviewer'];
 
 $rooms=[];$roomCount=0;$area=0.0;$roomsJson='[]';$detailOk=false;
 if($latest && !$showReports){
@@ -126,19 +135,47 @@ $events=array_slice($events,0,4);
     <?php endif; ?>
 
     <?php else: ?>
-    <section class="dash-outcomes" aria-labelledby="review-title">
-        <div>
+    <section class="dash-reports" aria-labelledby="review-title">
+        <div class="dash-reports-head">
             <h1 id="review-title">Reports and feedback</h1>
             <p>Use the report to discuss your concept with a qualified professional.</p>
         </div>
-        <div class="dash-outcome-list">
-            <a href="studio.php?tool=report"><?= dashIcon('download') ?><div><h3>Export a readiness report</h3><p>Print or save a PDF of your floor plans and concept estimates.</p></div><?= dashIcon('arrow') ?></a>
-            <a href="studio.php?tool=review"><?= dashIcon('message') ?><div><h3>Ask a reviewer for feedback</h3><p>Share a snapshot of your design and tell the reviewer what to look at.</p></div><?= dashIcon('arrow') ?></a>
-            <?php if(!$latest && $submissionsAvailable): ?>
-            <div class="dash-submission-note">
-                <strong>No submissions yet.</strong> After you submit, you can track feedback in <a href="profile.php#submissions">My submissions</a>.
-            </div>
-            <?php endif; ?>
+        <div class="dash-reports-grid">
+            <section aria-labelledby="actions-title">
+                <div class="dash-section-head"><h2 id="actions-title" class="dash-eyebrow">What you can do</h2></div>
+                <div class="dash-outcome-list">
+                    <a href="studio.php?tool=report"><span class="dash-tile"><?= dashIcon('download') ?></span><div><h3>Export a readiness report</h3><p>Print or save a PDF of your floor plans and concept estimates.</p></div><?= dashIcon('arrow') ?></a>
+                    <a href="studio.php?tool=review"><span class="dash-tile"><?= dashIcon('message') ?></span><div><h3>Ask a reviewer for feedback</h3><p>Share a snapshot of your design and tell the reviewer what to look at.</p></div><?= dashIcon('arrow') ?></a>
+                </div>
+                <p class="dash-callout"><?= dashIcon('info') ?><span>Archispace produces concept plans and estimates. Use the report to discuss your concept with a qualified professional.</span></p>
+            </section>
+            <section aria-labelledby="feedback-title">
+                <div class="dash-section-head">
+                    <h2 id="feedback-title" class="dash-eyebrow">Latest feedback<?= $latest ? ' · '.esc((string)$latest['name']) : '' ?></h2>
+                    <?php if($latest): ?><a class="dash-link" href="project.php?id=<?= (int)$latest['id'] ?>">View plan <?= dashIcon('arrow') ?></a><?php endif; ?>
+                </div>
+                <?php if($feedback): ?>
+                <div class="dash-feedback-list">
+                    <?php foreach($feedback as $f): $when=(int)($f['published_at'] ?: $f['updated_at']); ?>
+                    <article class="dash-feedback">
+                        <div class="dash-feedback-head">
+                            <span class="avatar" aria-hidden="true"><?= esc(initials((string)$f['author_name'])) ?></span>
+                            <div><h3><?= esc((string)$f['author_name']) ?></h3><p><?= esc($roleLabels[$f['author_role']] ?? 'Reviewer') ?> · <time datetime="<?= esc(gmdate('c',$when)) ?>"><?= esc(gmdate('M j',$when)) ?></time></p></div>
+                            <span class="badge">published</span>
+                        </div>
+                        <?php if((string)$f['location']!==''): ?><p class="dash-feedback-where"><?= esc((string)$f['location']) ?></p><?php endif; ?>
+                        <p class="preserve"><?= esc((string)$f['body']) ?></p>
+                    </article>
+                    <?php endforeach; ?>
+                </div>
+                <?php elseif(!$feedbackOk): ?>
+                <div class="dash-empty"><h3>Feedback couldn’t be loaded</h3><p><a href="dashboard.php?tab=reports">Try again</a> or open <a href="project.php?id=<?= (int)$latest['id'] ?>">the plan</a>.</p></div>
+                <?php elseif($latest): ?>
+                <div class="dash-empty"><h3>No feedback yet</h3><p><?= $latest['reviewer_name'] ? esc((string)$latest['reviewer_name']).' is reviewing this submission. Their comments will appear here.' : 'An admin will assign a reviewer. Their comments will appear here.' ?></p></div>
+                <?php elseif($submissionsAvailable): ?>
+                <div class="dash-empty"><h3>No submissions yet</h3><p>After you submit, you can track feedback here and in <a href="profile.php#submissions">My submissions</a>.</p></div>
+                <?php endif; ?>
+            </section>
         </div>
     </section>
     <?php endif; ?>
@@ -146,6 +183,5 @@ $events=array_slice($events,0,4);
     <p class="notice" role="status">We couldn’t load your submissions. <a href="<?= $showReports ? 'dashboard.php?tab=reports' : 'dashboard.php' ?>">Try again</a>.</p>
     <?php endif; ?>
 </main>
-<footer class="portal-footer dash-footer"><span>Archispace · Concept planning</span><a href="studio.php?tool=guide">Quick guide</a><button type="button" data-open="about-dialog">About Archispace</button></footer>
-<dialog id="about-dialog" aria-labelledby="about-title"><div class="section-heading"><h2 id="about-title">About Archispace</h2><button type="button" data-close="about-dialog" aria-label="Close">×</button></div><p>Design a floor plan, explore site conditions and compare flood, storm and earthquake scenarios. Save working designs in My designs, and submit a copy when you want human feedback.</p><p>Readiness reports give illustrative estimates. Ask qualified professionals to verify dimensions, structure, drainage and local code requirements before construction.</p></dialog>
+<?= siteFooter() ?>
 </body></html>
